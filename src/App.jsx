@@ -1,13 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
   CheckCircle2,
   Circle,
+  Download,
   Flag,
   Plus,
   Trash2,
 } from "lucide-react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
@@ -117,28 +120,28 @@ function getPinColor(priority) {
 }
 
 function getPrioritySize(priority) {
-  if (priority === "alta") return "min-h-[300px] p-6";
-  if (priority === "media") return "min-h-[230px] p-5";
-  return "min-h-[170px] p-4";
+  if (priority === "alta") return "min-h-[112px] p-3";
+  if (priority === "media") return "min-h-[86px] p-2.5";
+  return "min-h-[62px] p-2";
 }
 
 function getTitleSize(priority) {
-  if (priority === "alta") return "text-4xl md:text-5xl";
-  if (priority === "media") return "text-2xl md:text-3xl";
-  return "text-xl";
+  if (priority === "alta") return "text-sm";
+  if (priority === "media") return "text-[11px]";
+  return "text-[10px]";
 }
 
 function getPriorityLaneTop(priority, index) {
-  if (priority === "alta") return 18 + (index % 2) * 34;
-  if (priority === "media") return 138 + (index % 3) * 42;
-  return 265 + (index % 3) * 36;
+  if (priority === "alta") return 12 + (index % 2) * 26;
+  if (priority === "media") return 104 + (index % 3) * 34;
+  return 210 + (index % 3) * 28;
 }
 
 function getFloatingCardWidth(card) {
   const span = Math.max(1, card.endDay - card.startDay + 1);
-  if (card.priority === "alta") return Math.min(88, 30 + span * 12);
-  if (card.priority === "media") return Math.min(70, 23 + span * 10);
-  return Math.min(48, 17 + span * 8);
+  if (card.priority === "alta") return Math.min(58, 18 + span * 7);
+  if (card.priority === "media") return Math.min(46, 14 + span * 6);
+  return Math.min(32, 11 + span * 4);
 }
 
 function getFloatingCardLeft(card) {
@@ -208,6 +211,8 @@ export default function App() {
     type: "hito",
     priority: "media",
   });
+  const boardRef = useRef(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const weekDays = useMemo(
     () => dayNames.map((name, index) => ({ name, fullName: fullDayNames[index], date: addDays(weekStart, index), index })),
@@ -277,81 +282,105 @@ export default function App() {
     setWeekStart(startOfWeek(new Date()));
   }
 
-  return (
-    <div className="min-h-screen bg-[#f6ecd9] p-4 text-[#614f3d] md:p-8" style={{ fontFamily: "Comic Sans MS, Nunito, ui-sans-serif, system-ui" }}>
-      <div className="mx-auto max-w-7xl space-y-6">
-        <motion.header
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-[2.5rem] border border-[#e8d6bf] bg-gradient-to-br from-[#fff5e5] via-[#f8ead4] to-[#ecd8bc] p-6 shadow-lg"
-        >
-          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#fff9f2]/70 px-3 py-1 text-sm text-[#8b6f54]">
-                <CalendarDays className="h-4 w-4" /> Portada semanal dinámica
-              </div>
-              <h1 className="text-4xl font-semibold md:text-5xl">Carteles flotantes de la semana</h1>
-              <p className="mt-3 max-w-2xl text-[#7b6d61]">
-                Mapa mental semanal en formato agenda visual: tamaño por importancia, color por estado y ancho por duración.
-              </p>
-            </div>
-            <div className="rounded-3xl border border-[#ddc8b3] bg-[#fff9f2]/70 p-4 text-center shadow-sm">
-              <div className="text-xs uppercase tracking-wider text-[#8b6f54]">Avance</div>
-              <div className="text-4xl font-semibold">{progress}%</div>
-            </div>
-          </div>
-        </motion.header>
+  async function exportCalendarToPdf() {
+    if (!boardRef.current || isExportingPdf) return;
 
-        <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
-          <Card className="rounded-[2rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-4 backdrop-blur xl:sticky xl:top-6 xl:self-start">
+    setIsExportingPdf(true);
+
+    try {
+      const canvas = await html2canvas(boardRef.current, {
+        backgroundColor: "#fff4e2",
+        scale: 2,
+        useCORS: true,
+      });
+
+      const imageData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const availableWidth = pageWidth - margin * 2;
+      const availableHeight = pageHeight - margin * 2;
+      const imageRatio = canvas.width / canvas.height;
+      let imageWidth = availableWidth;
+      let imageHeight = imageWidth / imageRatio;
+
+      if (imageHeight > availableHeight) {
+        imageHeight = availableHeight;
+        imageWidth = imageHeight * imageRatio;
+      }
+
+      const x = (pageWidth - imageWidth) / 2;
+      const y = (pageHeight - imageHeight) / 2;
+
+      pdf.setFontSize(10);
+      pdf.text("ELTA Weekly Planner", margin, 6);
+      pdf.addImage(imageData, "PNG", x, y, imageWidth, imageHeight);
+      pdf.save("elta-weekly-planner.pdf");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
+  return (
+    <div className="h-screen overflow-hidden bg-[#f6ecd9] p-3 text-[#614f3d] md:p-4" style={{ fontFamily: "Comic Sans MS, Nunito, ui-sans-serif, system-ui" }}>
+      <div className="mx-auto flex h-full max-w-7xl flex-col">
+
+        <section className="grid min-h-0 flex-1 gap-3 md:grid-cols-[25%_1fr]">
+          <Card className="max-h-full overflow-y-auto rounded-[1.5rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-3 backdrop-blur md:sticky md:top-3 md:self-start">
             <CardContent>
               <div className="mb-4 rounded-3xl border border-[#ddc8b3] bg-[#fff7ea]/90 p-4">
                 <div className="text-sm font-semibold text-[#7b6d61]">Guardado local</div>
                 <div className="mt-1 text-xs text-[#9b8c7e]">Se guarda automáticamente en este dispositivo.</div>
-                <Button type="button" onClick={resetDeviceData} className="mt-3 w-full rounded-2xl bg-[#fff9f2]/90 px-4 py-3 text-[#5f5145] hover:bg-[#f4e4d2]">
-                  Reiniciar datos
-                </Button>
+                <div className="mt-3 grid grid-cols-1 gap-2">
+                  <Button type="button" onClick={exportCalendarToPdf} disabled={isExportingPdf} className="w-full rounded-xl bg-[#cfa983] px-4 py-3 font-bold text-[#5f5145] hover:bg-[#bf9470] disabled:opacity-60">
+                    <Download className="mr-2 inline h-5 w-5" /> {isExportingPdf ? "Exportando..." : "Exportar PDF"}
+                  </Button>
+                  <Button type="button" onClick={resetDeviceData} className="w-full rounded-xl bg-[#fff9f2]/90 px-4 py-3 text-[#5f5145] hover:bg-[#f4e4d2]">
+                    Reiniciar datos
+                  </Button>
+                </div>
               </div>
 
-              <h2 className="mb-4 text-xl font-bold">Cargar nuevo cartel</h2>
+              <h2 className="mb-3 text-base font-bold">Cargar nuevo cartel</h2>
               <form onSubmit={addFloatingCard} className="space-y-4">
                 <input
                   value={form.title}
                   onChange={(event) => setForm({ ...form, title: event.target.value })}
                   placeholder="Título"
-                  className="w-full rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none"
+                  className="w-full rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none"
                 />
                 <textarea
                   value={form.detail}
                   onChange={(event) => setForm({ ...form, detail: event.target.value })}
                   placeholder="Detalle"
-                  className="h-24 w-full rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none"
+                  className="h-16 w-full rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none"
                 />
                 <div className="grid grid-cols-2 gap-3">
-                  <select value={form.startDay} onChange={(event) => setForm({ ...form, startDay: Number(event.target.value) })} className="rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none">
+                  <select value={form.startDay} onChange={(event) => setForm({ ...form, startDay: Number(event.target.value) })} className="rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none">
                     {weekDays.map((day) => (
                       <option key={day.index} value={day.index}>{day.fullName}</option>
                     ))}
                   </select>
-                  <select value={form.endDay} onChange={(event) => setForm({ ...form, endDay: Number(event.target.value) })} className="rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none">
+                  <select value={form.endDay} onChange={(event) => setForm({ ...form, endDay: Number(event.target.value) })} className="rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none">
                     {weekDays.map((day) => (
                       <option key={day.index} value={day.index}>{day.fullName}</option>
                     ))}
                   </select>
                 </div>
-                <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} className="w-full rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none">
+                <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} className="w-full rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none">
                   <option value="alta">Alta</option>
                   <option value="media">Media</option>
                   <option value="baja">Normal</option>
                 </select>
-                <Button className="w-full rounded-2xl bg-[#cfa983] py-4 font-bold text-[#5f5145] hover:bg-[#bf9470]">
+                <Button className="w-full rounded-xl bg-[#cfa983] py-2 text-sm font-bold text-[#5f5145] hover:bg-[#bf9470]">
                   <Plus className="mr-2 inline h-5 w-5" /> Agregar cartel flotante
                 </Button>
               </form>
 
-              <div className="mt-8 border-t border-[#ddc8b3] pt-5">
-                <h3 className="mb-3 text-lg font-semibold">Tareas diarias rápidas</h3>
-                <select value={selectedTaskDay} onChange={(event) => setSelectedTaskDay(Number(event.target.value))} className="mb-3 w-full rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none">
+              <div className="mt-4 border-t border-[#ddc8b3] pt-3">
+                <h3 className="mb-2 text-sm font-semibold">Tareas diarias rápidas</h3>
+                <select value={selectedTaskDay} onChange={(event) => setSelectedTaskDay(Number(event.target.value))} className="mb-3 w-full rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none">
                   {weekDays.map((day) => (
                     <option key={day.index} value={day.index}>{day.fullName}</option>
                   ))}
@@ -361,9 +390,9 @@ export default function App() {
                     value={taskInput}
                     onChange={(event) => setTaskInput(event.target.value)}
                     placeholder="Agregar tarea común"
-                    className="w-full rounded-2xl border border-[#ddc8b3] bg-[#f7efe5] px-4 py-3 outline-none"
+                    className="w-full rounded-xl border border-[#ddc8b3] bg-[#f7efe5] px-3 py-2 text-sm outline-none"
                   />
-                  <Button type="button" onClick={addDailyTask} className="rounded-2xl bg-[#cfa983] px-4 py-3 font-bold text-[#5f5145]">
+                  <Button type="button" onClick={addDailyTask} className="rounded-xl bg-[#cfa983] px-4 py-3 font-bold text-[#5f5145]">
                     <Plus className="h-5 w-5" />
                   </Button>
                 </div>
@@ -371,19 +400,19 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <div className="overflow-x-auto rounded-[2.5rem] pb-2">
-            <div className="relative min-h-[680px] min-w-[980px] overflow-hidden rounded-[2.5rem] border border-[#ead8c0] bg-[#fff4e2] p-5 shadow-lg md:min-w-full">
-              <div className="absolute inset-x-6 bottom-[205px] h-px bg-[#d9c4ad]" />
+          <div className="min-h-0 min-w-0 overflow-x-auto rounded-[2rem] pb-1">
+            <div ref={boardRef} className="relative h-full min-h-[calc(100vh-32px)] min-w-[980px] overflow-hidden rounded-[2rem] border border-[#ead8c0] bg-[#fff4e2] p-4 shadow-lg md:min-w-full">
+              <div className="absolute inset-x-6 bottom-[150px] h-px bg-[#d9c4ad]" />
 
-              <div className="absolute inset-x-6 bottom-7 z-40 flex h-[185px] items-end justify-between gap-2">
+              <div className="absolute inset-x-6 bottom-7 z-40 flex h-[135px] items-end justify-between gap-2">
                 {weekDays.map((day) => {
                   const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
                   const completed = dayCards.filter((card) => card.done).length;
                   return (
                     <div key={day.index} className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
-                      <div className="h-24 w-px bg-gradient-to-t from-[#cfa983] to-transparent" />
-                      <div className="w-full rounded-3xl border border-[#ead8c0] bg-[#fff7ea]/90 px-2 py-3 shadow-md">
-                        <div className="text-xl font-semibold text-[#5f5145]">{day.name}</div>
+                      <div className="h-14 w-px bg-gradient-to-t from-[#cfa983] to-transparent" />
+                      <div className="w-full rounded-2xl border border-[#ead8c0] bg-[#fff7ea]/90 px-2 py-2 shadow-md">
+                        <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
                         <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
                         <div className="mt-2 rounded-full bg-[#fff9f2]/80 px-2 py-1 text-[10px] font-bold text-[#8b6f54]">
                           {completed}/{dayCards.length} hitos
@@ -404,16 +433,18 @@ export default function App() {
                 })}
               </div>
 
-              <div className="relative z-10 h-[430px] overflow-visible">
+              <div className="relative z-10 h-[calc(100vh-160px)] overflow-visible">
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
                     const cardClassName = [
-                      "relative overflow-visible rounded-md border bg-gradient-to-br shadow-xl transition-all duration-300 hover:shadow-2xl",
+                      "relative overflow-hidden rounded-md border bg-gradient-to-br shadow-xl transition-all duration-300 hover:shadow-2xl",
                       getStatusColor(card),
                       getPrioritySize(card.priority),
                     ].join(" ");
-                    const titleClassName = "mt-3 " + getTitleSize(card.priority) + " font-semibold leading-tight text-[#31261d]";
+                    const titleClassName =
+                      "mt-1 max-w-full overflow-hidden break-words font-semibold leading-[1.05] text-[#31261d] " +
+                      getTitleSize(card.priority);
 
                     return (
                       <motion.div
@@ -421,7 +452,7 @@ export default function App() {
                         layout
                         initial={{ opacity: 0, y: 24, rotate: -2 }}
                         animate={{ opacity: 1, y: 0, rotate: index % 2 === 0 ? -1.5 : 1.5 }}
-                        whileHover={{ y: -20, rotate: 0, scale: 1.08 }}
+                        whileHover={{ y: -12, rotate: 0, scale: 1.06 }}
                         onMouseEnter={() => setHoveredFloatingCardId(card.id)}
                         onMouseLeave={() => setHoveredFloatingCardId(null)}
                         onClick={() => setHoveredFloatingCardId(card.id)}
@@ -443,29 +474,37 @@ export default function App() {
                         </div>
 
                         <div className="flex items-start justify-between text-[#5b4636]">
-                          <button type="button" onClick={() => toggleFloatingCardDone(card.id)} className="rounded-full bg-[#fff8ef]/75 p-2">
-                            {card.done ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                          <button type="button" onClick={() => toggleFloatingCardDone(card.id)} className="rounded-full bg-[#fff8ef]/75 p-1.5">
+                            {card.done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
                           </button>
-                          <button type="button" onClick={() => deleteFloatingCard(card.id)} className="rounded-full bg-[#fff8ef]/75 p-2">
-                            <Trash2 className="h-4 w-4" />
+                          <button type="button" onClick={() => deleteFloatingCard(card.id)} className="rounded-full bg-[#fff8ef]/75 p-1.5">
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
 
-                        <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/45 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#6b513e]">
-                          <Flag className="h-4 w-4" /> {card.priority === "baja" ? "normal" : card.priority}
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/45 px-1.5 py-0 text-[7px] font-semibold uppercase tracking-wide text-[#6b513e]">
+                          <Flag className="h-3 w-3" /> {card.priority === "baja" ? "normal" : card.priority}
                         </div>
 
-                        <h3 className={titleClassName}>{card.title}</h3>
-                        {card.detail ? <p className="mt-3 text-sm font-medium leading-relaxed text-[#5e4939]">{card.detail}</p> : null}
+                        <h3 className={titleClassName}>
+                          <span className="block line-clamp-2 overflow-hidden break-words">
+                            {card.title}
+                          </span>
+                        </h3>
+                        {card.detail ? (
+                          <p className="mt-0.5 line-clamp-2 overflow-hidden break-words text-[8px] leading-[1.1] text-[#5e4939]">
+                            {card.detail}
+                          </p>
+                        ) : null}
 
-                        <div className="mt-5 border-t border-[#7b5c3a]/20 pt-3">
-                          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7b5c3a]/70">
+                        <div className="mt-1.5 border-t border-[#7b5c3a]/20 pt-1">
+                          <div className="mb-1 flex items-center justify-between text-[7px] font-semibold uppercase tracking-wide text-[#7b5c3a]/70">
                             <span>Duración visual</span>
                             <span>{dayNames[card.startDay]} → {dayNames[card.endDay]}</span>
                           </div>
                           <div className="flex gap-1">
                             {getDurationDots(card).map((isActive, dotIndex) => {
-                              const dotClassName = "h-2 flex-1 rounded-full " + (isActive ? "bg-[#7b5c3a]/65" : "bg-white/45");
+                              const dotClassName = "h-1.5 flex-1 rounded-full " + (isActive ? "bg-[#7b5c3a]/65" : "bg-white/45");
                               return <div key={dotIndex} className={dotClassName} />;
                             })}
                           </div>
