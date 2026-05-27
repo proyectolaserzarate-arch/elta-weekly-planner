@@ -306,88 +306,146 @@ export default function App() {
   }
 
   async function exportCalendarToPdf() {
-    if (!boardRef.current || isExportingPdf) return;
+  if (isExportingPdf) return;
 
-    setIsExportingPdf(true);
+  setIsExportingPdf(true);
 
-    try {
-      const boardElement = boardRef.current;
-      const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
+  try {
+    const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-      await document.fonts?.ready;
-      await new Promise((resolve) => setTimeout(resolve, 250));
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+    });
 
-      const canvas = await html2canvas(boardElement, {
-        backgroundColor: "#fff4e2",
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        foreignObjectRendering: false,
-        width: boardElement.scrollWidth,
-        height: boardElement.scrollHeight,
-        windowWidth: boardElement.scrollWidth,
-        windowHeight: boardElement.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDocument) => {
-          const clonedBoard = clonedDocument.querySelector("[data-export-board='true']");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
 
-          if (clonedBoard) {
-            clonedBoard.style.overflow = "visible";
-            clonedBoard.style.height = `${boardElement.scrollHeight}px`;
-            clonedBoard.style.minHeight = `${boardElement.scrollHeight}px`;
-            clonedBoard.style.width = `${boardElement.scrollWidth}px`;
-          }
-        },
+    pdf.setFillColor(255, 244, 226);
+    pdf.rect(0, 0, pageWidth, pdf.internal.pageSize.getHeight(), "F");
+
+    pdf.setTextColor(95, 81, 69);
+    pdf.setFontSize(18);
+    pdf.text("ELTA Weekly Planner", margin, 15);
+
+    pdf.setFontSize(10);
+    pdf.text("Mapa mental semanal - resumen exportado", margin, 22);
+
+    let y = 34;
+
+    pdf.setFontSize(13);
+    pdf.text("FloatingCards", margin, y);
+    y += 8;
+
+    floatingCards.forEach((card, index) => {
+      if (y > 180) {
+        pdf.addPage();
+        y = 18;
+      }
+
+      const status =
+        card.done
+          ? "Completado"
+          : card.endDay < getCurrentWeekDayIndex()
+            ? "Atrasado"
+            : card.startDay <= getCurrentWeekDayIndex() + 1
+              ? "Proximo"
+              : "En tiempo";
+
+      pdf.setFillColor(
+        card.priority === "alta" ? 255 : card.priority === "media" ? 255 : 216,
+        card.priority === "alta" ? 224 : card.priority === "media" ? 238 : 239,
+        card.priority === "alta" ? 138 : card.priority === "media" ? 158 : 158
+      );
+
+      pdf.roundedRect(margin, y, 82, 28, 3, 3, "F");
+
+      pdf.setTextColor(49, 38, 29);
+      pdf.setFontSize(10);
+      pdf.text(`${index + 1}. ${card.title}`, margin + 4, y + 7, { maxWidth: 74 });
+
+      pdf.setFontSize(8);
+      pdf.text(card.detail || "", margin + 4, y + 13, { maxWidth: 74 });
+
+      pdf.setFontSize(7);
+      pdf.text(
+        `${card.priority.toUpperCase()} | ${dayNames[card.startDay]} → ${dayNames[card.endDay]} | ${status}`,
+        margin + 4,
+        y + 24
+      );
+
+      y += 34;
+    });
+
+    y += 4;
+
+    if (y > 160) {
+      pdf.addPage();
+      y = 18;
+    }
+
+    pdf.setTextColor(95, 81, 69);
+    pdf.setFontSize(13);
+    pdf.text("Tareas diarias", margin, y);
+    y += 8;
+
+    weekDays.forEach((day) => {
+      if (y > 185) {
+        pdf.addPage();
+        y = 18;
+      }
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(49, 38, 29);
+      pdf.text(`${day.fullName} - ${formatDate(day.date)}`, margin, y);
+      y += 5;
+
+      const tasks = dailyTasks[day.index] || [];
+
+      if (tasks.length === 0) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(120, 105, 90);
+        pdf.text("- Sin tareas", margin + 4, y);
+        y += 5;
+      } else {
+        tasks.forEach((task) => {
+          pdf.setFontSize(8);
+          pdf.setTextColor(120, 105, 90);
+          pdf.text(`- ${task}`, margin + 4, y, { maxWidth: 250 });
+          y += 5;
+        });
+      }
+
+      y += 3;
+    });
+
+    if (Capacitor.isNativePlatform()) {
+      const pdfBase64 = pdf.output("datauristring").split(",")[1];
+
+      const savedFile = await Filesystem.writeFile({
+        path: fileName,
+        data: pdfBase64,
+        directory: Directory.Cache,
+        recursive: true,
       });
 
-      const imageData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 6;
-      const availableWidth = pageWidth - margin * 2;
-      const availableHeight = pageHeight - margin * 2;
-      const imageRatio = canvas.width / canvas.height;
-      let imageWidth = availableWidth;
-      let imageHeight = imageWidth / imageRatio;
-
-      if (imageHeight > availableHeight) {
-        imageHeight = availableHeight;
-        imageWidth = imageHeight * imageRatio;
-      }
-
-      const x = (pageWidth - imageWidth) / 2;
-      const y = (pageHeight - imageHeight) / 2;
-
-      pdf.addImage(imageData, "PNG", x, y, imageWidth, imageHeight);
-
-      if (Capacitor.isNativePlatform()) {
-        const pdfBase64 = pdf.output("datauristring").split(",")[1];
-        const savedFile = await Filesystem.writeFile({
-          path: fileName,
-          data: pdfBase64,
-          directory: Directory.Cache,
-          recursive: true,
-        });
-
-        await Share.share({
-          title: "ELTA Weekly Planner",
-          text: "Calendario semanal exportado en PDF",
-          files: [savedFile.uri],
-          dialogTitle: "Compartir PDF",
-        });
-      } else {
-        pdf.save(fileName);
-      }
-    } catch (error) {
-      console.error("No se pudo exportar el PDF", error);
-      alert(`No se pudo exportar el PDF: ${error?.message || "error desconocido"}`);
-    } finally {
-      setIsExportingPdf(false);
+      await Share.share({
+        title: "ELTA Weekly Planner",
+        text: "Calendario semanal exportado en PDF",
+        files: [savedFile.uri],
+        dialogTitle: "Compartir PDF",
+      });
+    } else {
+      pdf.save(fileName);
     }
+  } catch (error) {
+    console.error("No se pudo exportar el PDF", error);
+    alert(`No se pudo exportar el PDF: ${error?.message || "error desconocido"}`);
+  } finally {
+    setIsExportingPdf(false);
   }
+}
 
  function renderPlannerControls(isMobile = false) {
     return (
