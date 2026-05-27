@@ -306,6 +306,7 @@ export default function App() {
       const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
 
       await document.fonts?.ready;
+      await new Promise((resolve) => setTimeout(resolve, 250));
 
       const canvas = await html2canvas(boardElement, {
         backgroundColor: "#fff4e2",
@@ -358,12 +359,13 @@ export default function App() {
           path: fileName,
           data: pdfBase64,
           directory: Directory.Cache,
+          recursive: true,
         });
 
         await Share.share({
           title: "ELTA Weekly Planner",
           text: "Calendario semanal exportado en PDF",
-          url: savedFile.uri,
+          files: [savedFile.uri],
           dialogTitle: "Compartir PDF",
         });
       } else {
@@ -371,13 +373,13 @@ export default function App() {
       }
     } catch (error) {
       console.error("No se pudo exportar el PDF", error);
-      alert("No se pudo exportar el PDF. Revisá la consola para más detalle.");
+      alert(`No se pudo exportar el PDF: ${error?.message || "error desconocido"}`);
     } finally {
       setIsExportingPdf(false);
     }
   }
 
-  function PlannerControls({ isMobile = false }) {
+ function renderPlannerControls(isMobile = false) {
     return (
       <CardContent>
         {isMobile ? (
@@ -494,7 +496,7 @@ export default function App() {
       <div className="mx-auto flex h-full max-w-[1600px] flex-col">
         <section className="grid min-h-0 flex-1 gap-2 md:grid-cols-[220px_1fr]">
           <Card className="hidden max-h-full overflow-y-auto rounded-[1.25rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-2 backdrop-blur md:sticky md:top-2 md:block md:self-start">
-            <PlannerControls />
+            {renderPlannerControls()}
           </Card>
 
           <div className="min-h-0 min-w-0 overflow-x-auto rounded-[1.5rem] pb-1">
@@ -639,7 +641,7 @@ export default function App() {
                 className="absolute inset-x-2 bottom-2 max-h-[82vh] overflow-y-auto rounded-[1.75rem] border border-[#ddc8b3] bg-[#fff9f2] p-3 shadow-[0_-12px_40px_rgba(70,45,25,0.2)]"
                 onClick={(event) => event.stopPropagation()}
               >
-                <PlannerControls isMobile />
+                {renderPlannerControls(true)}
               </motion.div>
             </motion.div>
           ) : null}
