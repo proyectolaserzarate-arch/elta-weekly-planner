@@ -519,7 +519,7 @@ export default function App() {
                   const completed = dayCards.filter((card) => card.done).length;
                   return (
                     <div key={day.index} className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
-                      <div className="h-12 w-px bg-gradient-to-t from-[#cfa983] to-transparent" />
+                      <div className="h-12 w-px bg-[#d7b796]/60" />
                       <div className="w-full rounded-2xl border border-[#ead8c0] bg-[#fff7ea]/95 px-2 py-2 shadow-md">
                         <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
                         <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
