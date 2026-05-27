@@ -119,10 +119,19 @@ function getCurrentWeekDayIndex() {
 function getStatusColor(card) {
   const currentDay = getCurrentWeekDayIndex();
 
-  if (card.done) return "from-[#b9d9a6] via-[#cfe7b9] to-[#eaf4d8] border-[#8fbf75]";
-  if (card.endDay < currentDay) return "from-[#ff73a6] via-[#ff8fbb] to-[#ffc2d6] border-[#e35c91]";
-  if (card.startDay <= currentDay + 1) return "from-[#ffd35a] via-[#ffe083] to-[#fff1bf] border-[#e5b931]";
-  return "from-[#bde46c] via-[#d4ef8d] to-[#edf8c9] border-[#9cc85d]";
+  if (card.done) {
+    return "bg-[#d6edc7] border-[#8fbf75]";
+  }
+
+  if (card.endDay < currentDay) {
+    return "bg-[#ffb3cc] border-[#e35c91]";
+  }
+
+  if (card.startDay <= currentDay + 1) {
+    return "bg-[#ffe08a] border-[#e5b931]";
+  }
+
+  return "bg-[#d8ef9e] border-[#9cc85d]";
 }
 
 function getPinColor(priority) {
@@ -539,7 +548,7 @@ export default function App() {
                     const isHovered = hoveredFloatingCardId === card.id;
                     const cardShellClassName = "absolute overflow-visible";
                     const paperClassName = [
-                      "relative h-full overflow-hidden rounded-md border bg-gradient-to-br shadow-xl transition-all duration-300 hover:shadow-2xl",
+                      "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
                       getStatusColor(card),
                       getPrioritySize(card.priority),
                     ].join(" ");
