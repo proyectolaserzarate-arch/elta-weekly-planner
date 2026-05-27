@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { Capacitor } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
@@ -299,17 +302,40 @@ export default function App() {
     setIsExportingPdf(true);
 
     try {
-      const canvas = await html2canvas(boardRef.current, {
+      const boardElement = boardRef.current;
+      const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+      await document.fonts?.ready;
+
+      const canvas = await html2canvas(boardElement, {
         backgroundColor: "#fff4e2",
         scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: boardElement.scrollWidth,
+        height: boardElement.scrollHeight,
+        windowWidth: boardElement.scrollWidth,
+        windowHeight: boardElement.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDocument) => {
+          const clonedBoard = clonedDocument.querySelector("[data-export-board='true']");
+
+          if (clonedBoard) {
+            clonedBoard.style.overflow = "visible";
+            clonedBoard.style.height = `${boardElement.scrollHeight}px`;
+            clonedBoard.style.minHeight = `${boardElement.scrollHeight}px`;
+            clonedBoard.style.width = `${boardElement.scrollWidth}px`;
+          }
+        },
       });
 
       const imageData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8;
+      const margin = 6;
       const availableWidth = pageWidth - margin * 2;
       const availableHeight = pageHeight - margin * 2;
       const imageRatio = canvas.width / canvas.height;
@@ -324,10 +350,28 @@ export default function App() {
       const x = (pageWidth - imageWidth) / 2;
       const y = (pageHeight - imageHeight) / 2;
 
-      pdf.setFontSize(10);
-      pdf.text("ELTA Weekly Planner", margin, 6);
       pdf.addImage(imageData, "PNG", x, y, imageWidth, imageHeight);
-      pdf.save("elta-weekly-planner.pdf");
+
+      if (Capacitor.isNativePlatform()) {
+        const pdfBase64 = pdf.output("datauristring").split(",")[1];
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: pdfBase64,
+          directory: Directory.Cache,
+        });
+
+        await Share.share({
+          title: "ELTA Weekly Planner",
+          text: "Calendario semanal exportado en PDF",
+          url: savedFile.uri,
+          dialogTitle: "Compartir PDF",
+        });
+      } else {
+        pdf.save(fileName);
+      }
+    } catch (error) {
+      console.error("No se pudo exportar el PDF", error);
+      alert("No se pudo exportar el PDF. Revisá la consola para más detalle.");
     } finally {
       setIsExportingPdf(false);
     }
@@ -454,7 +498,7 @@ export default function App() {
           </Card>
 
           <div className="min-h-0 min-w-0 overflow-x-auto rounded-[1.5rem] pb-1">
-            <div ref={boardRef} className="relative h-full min-h-[calc(100vh-20px)] min-w-[980px] overflow-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg md:min-w-full">
+            <div data-export-board="true" ref={boardRef} className="relative h-full min-h-[calc(100vh-20px)] min-w-[980px] overflow-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg md:min-w-full">
               <div className="absolute inset-x-6 bottom-[205px] h-px bg-[#c7aa88]" />
 
               <div className="absolute inset-x-6 bottom-5 z-[80] flex h-[165px] items-end justify-between gap-2">
