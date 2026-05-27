@@ -314,6 +314,7 @@ export default function App() {
         useCORS: true,
         allowTaint: true,
         logging: false,
+        foreignObjectRendering: false,
         width: boardElement.scrollWidth,
         height: boardElement.scrollHeight,
         windowWidth: boardElement.scrollWidth,
@@ -495,7 +496,7 @@ export default function App() {
     <div className="h-screen overflow-hidden bg-[#f6ecd9] p-2 text-[#614f3d] md:p-3" style={{ fontFamily: "Comic Sans MS, Nunito, ui-sans-serif, system-ui" }}>
       <div className="mx-auto flex h-full max-w-[1600px] flex-col">
         <section className="grid min-h-0 flex-1 gap-2 md:grid-cols-[220px_1fr]">
-          <Card className="hidden max-h-full overflow-y-auto rounded-[1.25rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-2 backdrop-blur md:sticky md:top-2 md:block md:self-start">
+          <Card className="hidden max-h-full overflow-y-auto rounded-[1.25rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-2 md:sticky md:top-2 md:block md:self-start">
             {renderPlannerControls()}
           </Card>
 
