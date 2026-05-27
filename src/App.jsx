@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Check,
   CheckCircle2,
   Circle,
   Download,
@@ -9,7 +10,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
@@ -31,7 +31,7 @@ function Button({ className = "", children, ...props }) {
   );
 }
 
-const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v4";
+const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v5";
 const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const fullDayNames = [
   "Lunes",
@@ -43,12 +43,20 @@ const fullDayNames = [
   "Domingo",
 ];
 
+function createTask(text, done = false) {
+  return {
+    id: crypto.randomUUID(),
+    text,
+    done,
+  };
+}
+
 const defaultDailyTasks = {
-  0: ["Enviar reporte operativo"],
-  1: ["Llamar proveedores"],
-  2: ["Actualizar indicadores"],
+  0: [createTask("Enviar reporte operativo")],
+  1: [createTask("Llamar proveedores")],
+  2: [createTask("Actualizar indicadores")],
   3: [],
-  4: ["Control semanal"],
+  4: [createTask("Control semanal")],
   5: [],
   6: [],
 };
@@ -111,6 +119,28 @@ function normalizeRange(startDay, endDay) {
   return start <= end ? { startDay: start, endDay: end } : { startDay: end, endDay: start };
 }
 
+function normalizeDailyTasks(tasks) {
+  const normalized = { ...defaultDailyTasks };
+
+  for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+    const rawTasks = tasks?.[dayIndex] || [];
+
+    normalized[dayIndex] = rawTasks.map((task) => {
+      if (typeof task === "string") {
+        return createTask(task);
+      }
+
+      return {
+        id: task.id || crypto.randomUUID(),
+        text: task.text || task.title || "Tarea sin nombre",
+        done: Boolean(task.done),
+      };
+    });
+  }
+
+  return normalized;
+}
+
 function getCurrentWeekDayIndex() {
   const today = new Date();
   return today.getDay() === 0 ? 6 : today.getDay() - 1;
@@ -119,18 +149,9 @@ function getCurrentWeekDayIndex() {
 function getStatusColor(card) {
   const currentDay = getCurrentWeekDayIndex();
 
-  if (card.done) {
-    return "bg-[#d6edc7] border-[#8fbf75]";
-  }
-
-  if (card.endDay < currentDay) {
-    return "bg-[#ffb3cc] border-[#e35c91]";
-  }
-
-  if (card.startDay <= currentDay + 1) {
-    return "bg-[#ffe08a] border-[#e5b931]";
-  }
-
+  if (card.done) return "bg-[#d6edc7] border-[#8fbf75]";
+  if (card.endDay < currentDay) return "bg-[#ffb3cc] border-[#e35c91]";
+  if (card.startDay <= currentDay + 1) return "bg-[#ffe08a] border-[#e5b931]";
   return "bg-[#d8ef9e] border-[#9cc85d]";
 }
 
@@ -184,7 +205,7 @@ function getDurationDots(card) {
 
 function createLocalSnapshot(floatingCards, dailyTasks, weekStart) {
   return {
-    version: 4,
+    version: 5,
     updatedAt: new Date().toISOString(),
     floatingCards,
     dailyTasks,
@@ -213,6 +234,7 @@ function runSelfTests() {
   console.assert(getFloatingCardZIndex({ priority: "alta" }, false) > getFloatingCardZIndex({ priority: "baja" }, false), "high priority should stack higher");
   console.assert(getFloatingCardZIndex({ priority: "baja" }, true) > 250, "hovered cards should jump above the week line");
   console.assert(getDurationDots({ startDay: 1, endDay: 3 }).filter(Boolean).length === 3, "duration dots should match range");
+  console.assert(normalizeDailyTasks({ 0: ["Legacy"] })[0][0].text === "Legacy", "legacy string tasks should migrate to objects");
 }
 
 runSelfTests();
@@ -224,7 +246,7 @@ export default function App() {
     localSnapshot ? startOfWeek(new Date(localSnapshot.weekStart)) : startOfWeek(new Date())
   );
   const [floatingCards, setFloatingCards] = useState(localSnapshot?.floatingCards || initialFloatingCards);
-  const [dailyTasks, setDailyTasks] = useState(localSnapshot?.dailyTasks || defaultDailyTasks);
+  const [dailyTasks, setDailyTasks] = useState(normalizeDailyTasks(localSnapshot?.dailyTasks || defaultDailyTasks));
   const [hoveredFloatingCardId, setHoveredFloatingCardId] = useState(null);
   const [taskInput, setTaskInput] = useState("");
   const [selectedTaskDay, setSelectedTaskDay] = useState(0);
@@ -286,66 +308,66 @@ export default function App() {
     if (!taskInput.trim()) return;
     setDailyTasks((previous) => ({
       ...previous,
-      [selectedTaskDay]: [...(previous[selectedTaskDay] || []), taskInput.trim()],
+      [selectedTaskDay]: [...(previous[selectedTaskDay] || []), createTask(taskInput.trim())],
     }));
     setTaskInput("");
   }
 
-  function removeDailyTask(dayIndex, taskIndex) {
+  function toggleDailyTaskDone(dayIndex, taskId) {
     setDailyTasks((previous) => ({
       ...previous,
-      [dayIndex]: (previous[dayIndex] || []).filter((_, index) => index !== taskIndex),
+      [dayIndex]: (previous[dayIndex] || []).map((task) =>
+        task.id === taskId ? { ...task, done: !task.done } : task
+      ),
+    }));
+  }
+
+  function removeDailyTask(dayIndex, taskId) {
+    setDailyTasks((previous) => ({
+      ...previous,
+      [dayIndex]: (previous[dayIndex] || []).filter((task) => task.id !== taskId),
     }));
   }
 
   function resetDeviceData() {
     window.localStorage.removeItem(LOCAL_STORAGE_KEY);
     setFloatingCards(initialFloatingCards);
-    setDailyTasks(defaultDailyTasks);
+    setDailyTasks(normalizeDailyTasks(defaultDailyTasks));
     setWeekStart(startOfWeek(new Date()));
   }
 
   async function exportCalendarToPdf() {
-  if (isExportingPdf) return;
+    if (isExportingPdf) return;
 
-  setIsExportingPdf(true);
+    setIsExportingPdf(true);
 
-  try {
-    const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
+    try {
+      const fileName = `elta-weekly-planner-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
 
-    const pdf = new jsPDF({
-      orientation: "landscape",
-      unit: "mm",
-      format: "a4",
-    });
+      pdf.setFillColor(255, 244, 226);
+      pdf.rect(0, 0, pageWidth, pageHeight, "F");
+      pdf.setTextColor(95, 81, 69);
+      pdf.setFontSize(18);
+      pdf.text("ELTA Weekly Planner", margin, 15);
+      pdf.setFontSize(10);
+      pdf.text("Mapa mental semanal - resumen exportado", margin, 22);
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 10;
+      let y = 34;
+      pdf.setFontSize(13);
+      pdf.text("FloatingCards", margin, y);
+      y += 8;
 
-    pdf.setFillColor(255, 244, 226);
-    pdf.rect(0, 0, pageWidth, pdf.internal.pageSize.getHeight(), "F");
+      floatingCards.forEach((card, index) => {
+        if (y > 180) {
+          pdf.addPage();
+          y = 18;
+        }
 
-    pdf.setTextColor(95, 81, 69);
-    pdf.setFontSize(18);
-    pdf.text("ELTA Weekly Planner", margin, 15);
-
-    pdf.setFontSize(10);
-    pdf.text("Mapa mental semanal - resumen exportado", margin, 22);
-
-    let y = 34;
-
-    pdf.setFontSize(13);
-    pdf.text("FloatingCards", margin, y);
-    y += 8;
-
-    floatingCards.forEach((card, index) => {
-      if (y > 180) {
-        pdf.addPage();
-        y = 18;
-      }
-
-      const status =
-        card.done
+        const status = card.done
           ? "Completado"
           : card.endDay < getCurrentWeekDayIndex()
             ? "Atrasado"
@@ -353,101 +375,90 @@ export default function App() {
               ? "Proximo"
               : "En tiempo";
 
-      pdf.setFillColor(
-        card.priority === "alta" ? 255 : card.priority === "media" ? 255 : 216,
-        card.priority === "alta" ? 224 : card.priority === "media" ? 238 : 239,
-        card.priority === "alta" ? 138 : card.priority === "media" ? 158 : 158
-      );
+        if (card.priority === "alta") pdf.setFillColor(255, 224, 138);
+        else if (card.priority === "media") pdf.setFillColor(255, 238, 158);
+        else pdf.setFillColor(216, 239, 158);
 
-      pdf.roundedRect(margin, y, 82, 28, 3, 3, "F");
+        pdf.roundedRect(margin, y, 82, 28, 3, 3, "F");
+        pdf.setTextColor(49, 38, 29);
+        pdf.setFontSize(10);
+        pdf.text(`${index + 1}. ${card.title}`, margin + 4, y + 7, { maxWidth: 74 });
+        pdf.setFontSize(8);
+        pdf.text(card.detail || "", margin + 4, y + 13, { maxWidth: 74 });
+        pdf.setFontSize(7);
+        pdf.text(`${card.priority.toUpperCase()} | ${dayNames[card.startDay]} → ${dayNames[card.endDay]} | ${status}`, margin + 4, y + 24);
+        y += 34;
+      });
 
-      pdf.setTextColor(49, 38, 29);
-      pdf.setFontSize(10);
-      pdf.text(`${index + 1}. ${card.title}`, margin + 4, y + 7, { maxWidth: 74 });
+      y += 4;
 
-      pdf.setFontSize(8);
-      pdf.text(card.detail || "", margin + 4, y + 13, { maxWidth: 74 });
-
-      pdf.setFontSize(7);
-      pdf.text(
-        `${card.priority.toUpperCase()} | ${dayNames[card.startDay]} → ${dayNames[card.endDay]} | ${status}`,
-        margin + 4,
-        y + 24
-      );
-
-      y += 34;
-    });
-
-    y += 4;
-
-    if (y > 160) {
-      pdf.addPage();
-      y = 18;
-    }
-
-    pdf.setTextColor(95, 81, 69);
-    pdf.setFontSize(13);
-    pdf.text("Tareas diarias", margin, y);
-    y += 8;
-
-    weekDays.forEach((day) => {
-      if (y > 185) {
+      if (y > 160) {
         pdf.addPage();
         y = 18;
       }
 
-      pdf.setFontSize(10);
-      pdf.setTextColor(49, 38, 29);
-      pdf.text(`${day.fullName} - ${formatDate(day.date)}`, margin, y);
-      y += 5;
+      pdf.setTextColor(95, 81, 69);
+      pdf.setFontSize(13);
+      pdf.text("Tareas diarias", margin, y);
+      y += 8;
 
-      const tasks = dailyTasks[day.index] || [];
+      weekDays.forEach((day) => {
+        if (y > 185) {
+          pdf.addPage();
+          y = 18;
+        }
 
-      if (tasks.length === 0) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(120, 105, 90);
-        pdf.text("- Sin tareas", margin + 4, y);
+        pdf.setFontSize(10);
+        pdf.setTextColor(49, 38, 29);
+        pdf.text(`${day.fullName} - ${formatDate(day.date)}`, margin, y);
         y += 5;
-      } else {
-        tasks.forEach((task) => {
+
+        const tasks = dailyTasks[day.index] || [];
+
+        if (tasks.length === 0) {
           pdf.setFontSize(8);
           pdf.setTextColor(120, 105, 90);
-          pdf.text(`- ${task}`, margin + 4, y, { maxWidth: 250 });
+          pdf.text("- Sin tareas", margin + 4, y);
           y += 5;
+        } else {
+          tasks.forEach((task) => {
+            pdf.setFontSize(8);
+            pdf.setTextColor(task.done ? 130 : 80, task.done ? 130 : 90, task.done ? 130 : 80);
+            pdf.text(`${task.done ? "[x]" : "[ ]"} ${task.text}`, margin + 4, y, { maxWidth: 250 });
+            y += 5;
+          });
+        }
+
+        y += 3;
+      });
+
+      if (Capacitor.isNativePlatform()) {
+        const pdfBase64 = pdf.output("datauristring").split(",")[1];
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: pdfBase64,
+          directory: Directory.Cache,
+          recursive: true,
         });
+
+        await Share.share({
+          title: "ELTA Weekly Planner",
+          text: "Calendario semanal exportado en PDF",
+          files: [savedFile.uri],
+          dialogTitle: "Compartir PDF",
+        });
+      } else {
+        pdf.save(fileName);
       }
-
-      y += 3;
-    });
-
-    if (Capacitor.isNativePlatform()) {
-      const pdfBase64 = pdf.output("datauristring").split(",")[1];
-
-      const savedFile = await Filesystem.writeFile({
-        path: fileName,
-        data: pdfBase64,
-        directory: Directory.Cache,
-        recursive: true,
-      });
-
-      await Share.share({
-        title: "ELTA Weekly Planner",
-        text: "Calendario semanal exportado en PDF",
-        files: [savedFile.uri],
-        dialogTitle: "Compartir PDF",
-      });
-    } else {
-      pdf.save(fileName);
+    } catch (error) {
+      console.error("No se pudo exportar el PDF", error);
+      alert(`No se pudo exportar el PDF: ${error?.message || "error desconocido"}`);
+    } finally {
+      setIsExportingPdf(false);
     }
-  } catch (error) {
-    console.error("No se pudo exportar el PDF", error);
-    alert(`No se pudo exportar el PDF: ${error?.message || "error desconocido"}`);
-  } finally {
-    setIsExportingPdf(false);
   }
-}
 
- function renderPlannerControls(isMobile = false) {
+  function renderPlannerControls(isMobile = false) {
     return (
       <CardContent>
         {isMobile ? (
@@ -567,40 +578,9 @@ export default function App() {
             {renderPlannerControls()}
           </Card>
 
-          <div className="min-h-0 min-w-0 overflow-x-auto rounded-[1.5rem] pb-1">
-            <div data-export-board="true" ref={boardRef} className="relative h-full min-h-[calc(100vh-20px)] min-w-[980px] overflow-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg md:min-w-full">
-              <div className="absolute inset-x-6 bottom-[205px] h-px bg-[#c7aa88]" />
-
-              <div className="absolute inset-x-6 bottom-5 z-[80] flex h-[165px] items-end justify-between gap-2">
-                {weekDays.map((day) => {
-                  const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
-                  const completed = dayCards.filter((card) => card.done).length;
-                  return (
-                    <div key={day.index} className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
-                      <div className="h-12 w-px bg-[#d7b796]/60" />
-                      <div className="w-full rounded-2xl border border-[#ead8c0] bg-[#fff7ea]/95 px-2 py-2 shadow-md">
-                        <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
-                        <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
-                        <div className="mt-2 rounded-full bg-[#fff9f2]/80 px-2 py-1 text-[10px] font-bold text-[#8b6f54]">
-                          {completed}/{dayCards.length} hitos
-                        </div>
-                        <div className="mt-2 space-y-1 text-left">
-                          {(dailyTasks[day.index] || []).slice(0, 2).map((task, taskIndex) => (
-                            <div key={day.index + "-" + taskIndex} className="group flex items-center justify-between rounded-xl bg-[#efe0cd]/70 px-2 py-1 text-[9px] text-[#7b6d61]">
-                              <span className="truncate">• {task}</span>
-                              <button type="button" onClick={() => removeDailyTask(day.index, taskIndex)} className="opacity-0 transition group-hover:opacity-100">
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="absolute inset-x-4 top-4 bottom-[230px] overflow-visible">
+          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_190px] gap-2 rounded-[1.5rem]">
+            <div className="min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg">
+              <div className="relative h-full min-h-[360px] min-w-[980px] overflow-visible">
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
@@ -679,6 +659,60 @@ export default function App() {
                     );
                   })}
                 </AnimatePresence>
+              </div>
+            </div>
+
+            <div data-export-board="true" ref={boardRef} className="overflow-x-auto rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-2 shadow-lg">
+              <div className="flex h-full min-w-[980px] items-stretch gap-2">
+                {weekDays.map((day) => {
+                  const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
+                  const completed = dayCards.filter((card) => card.done).length;
+                  const tasks = dailyTasks[day.index] || [];
+
+                  return (
+                    <div key={day.index} className="flex min-w-[132px] flex-1 flex-col rounded-2xl border border-[#ead8c0] bg-[#fff7ea]/95 px-2 py-2 shadow-md">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
+                          <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
+                        </div>
+                        <div className="rounded-full bg-[#fff9f2]/80 px-2 py-1 text-[10px] font-bold text-[#8b6f54]">
+                          {completed}/{dayCards.length}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 text-left">
+                        {tasks.length === 0 ? (
+                          <div className="rounded-xl bg-[#efe0cd]/45 px-2 py-1 text-[9px] text-[#9b8c7e]">Sin tareas</div>
+                        ) : null}
+
+                        {tasks.map((task) => (
+                          <div
+                            key={task.id}
+                            className={
+                              "flex items-center justify-between gap-1 rounded-xl px-2 py-1 text-[9px] text-[#7b6d61] " +
+                              (task.done ? "bg-[#d6edc7]/80 opacity-70" : "bg-[#efe0cd]/70")
+                            }
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleDailyTaskDone(day.index, task.id)}
+                              className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                            >
+                              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/70">
+                                {task.done ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                              </span>
+                              <span className={"truncate " + (task.done ? "line-through" : "")}>{task.text}</span>
+                            </button>
+                            <button type="button" onClick={() => removeDailyTask(day.index, task.id)} className="shrink-0 rounded-full bg-white/60 p-1">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
