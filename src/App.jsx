@@ -32,7 +32,8 @@ function Button({ className = "", children, ...props }) {
 }
 
 const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
-const APP_VERSION = "0.7.1-zoom-dia";
+const APP_VERSION = "0.8.0-snap";
+const SNAP_STRENGTH = 0.72;
 const MIN_BOARD_ZOOM = 0.65;
 const MAX_BOARD_ZOOM = 1.45;
 const BOARD_ZOOM_STEP = 0.1;
@@ -221,6 +222,30 @@ function clampFloatingCardOffset(offsetX, offsetY) {
   };
 }
 
+function getSnapGridSize(priority) {
+  if (priority === "alta") return { x: 36, y: 28 };
+  if (priority === "media") return { x: 30, y: 24 };
+  return { x: 24, y: 20 };
+}
+
+function getPrioritySnapBias(priority) {
+  if (priority === "alta") return -10;
+  if (priority === "media") return 0;
+  return 10;
+}
+
+function snapFloatingCardOffset(card, rawOffsetX, rawOffsetY) {
+  const grid = getSnapGridSize(card.priority);
+  const priorityBias = getPrioritySnapBias(card.priority);
+  const snappedX = Math.round(rawOffsetX / grid.x) * grid.x;
+  const snappedY = Math.round((rawOffsetY + priorityBias) / grid.y) * grid.y - priorityBias;
+
+  return clampFloatingCardOffset(
+    rawOffsetX + (snappedX - rawOffsetX) * SNAP_STRENGTH,
+    rawOffsetY + (snappedY - rawOffsetY) * SNAP_STRENGTH
+  );
+}
+
 function clampBoardZoom(value) {
   return Math.max(MIN_BOARD_ZOOM, Math.min(MAX_BOARD_ZOOM, Number(value) || 1));
 }
@@ -262,6 +287,8 @@ function runSelfTests() {
   console.assert(clampFloatingCardOffset(999, -999).y === -80, "drag offset y should be clamped");
   console.assert(clampBoardZoom(99) === MAX_BOARD_ZOOM, "board zoom should be clamped at max");
   console.assert(clampBoardZoom(-99) === MIN_BOARD_ZOOM, "board zoom should be clamped at min");
+  console.assert(snapFloatingCardOffset({ priority: "alta" }, 37, 29).x !== 37, "snap should adjust x offset");
+  console.assert(snapFloatingCardOffset({ priority: "media" }, 31, 25).y !== 25, "snap should adjust y offset");
 }
 
 runSelfTests();
@@ -341,10 +368,11 @@ export default function App() {
         if (card.id !== id) return card;
 
         const currentOffset = getFloatingCardOffset(card);
-        const nextOffset = clampFloatingCardOffset(
+        const rawOffset = clampFloatingCardOffset(
           currentOffset.x + deltaX / boardZoom,
           currentOffset.y + deltaY / boardZoom
         );
+        const nextOffset = snapFloatingCardOffset(card, rawOffset.x, rawOffset.y);
 
         return {
           ...card,
@@ -732,10 +760,11 @@ export default function App() {
                         layout
                         initial={{ opacity: 0, y: 18, rotate: -2 }}
                         animate={{ opacity: 1, x: cardOffset.x, y: cardOffset.y, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
-                        whileHover={{ rotate: 0, scale: 1.05 }}
+                        transition={{ type: "spring", stiffness: 260, damping: 22, mass: card.priority === "alta" ? 1.05 : 0.85 }}
+                        whileHover={{ rotate: 0, scale: 1.055 }}
                         drag
                         dragMomentum={false}
-                        dragElastic={0.08}
+                        dragElastic={0.16}
                         onDragEnd={(_, info) => moveFloatingCard(card.id, info.offset.x, info.offset.y)}
                         onDoubleClick={() => resetFloatingCardPosition(card.id)}
                         onMouseEnter={() => setHoveredFloatingCardId(card.id)}
