@@ -32,7 +32,7 @@ function Button({ className = "", children, ...props }) {
 }
 
 const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
-const APP_VERSION = "0.7.0-zoom";
+const APP_VERSION = "0.7.1-zoom-dia";
 const MIN_BOARD_ZOOM = 0.65;
 const MAX_BOARD_ZOOM = 1.45;
 const BOARD_ZOOM_STEP = 0.1;
@@ -278,6 +278,7 @@ export default function App() {
   const [taskInput, setTaskInput] = useState("");
   const [selectedTaskDay, setSelectedTaskDay] = useState(0);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
+  const [selectedExpandedDay, setSelectedExpandedDay] = useState(null);
   const [boardZoom, setBoardZoom] = useState(clampBoardZoom(localSnapshot?.boardZoom || 1));
   const [form, setForm] = useState({
     title: "",
@@ -688,7 +689,7 @@ export default function App() {
             {renderPlannerControls()}
           </Card>
 
-          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_190px] gap-2 rounded-[1.5rem]">
+          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_210px] gap-2 rounded-[1.5rem]">
             <div
               className="relative min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg"
               onWheel={handleBoardWheel}
@@ -807,8 +808,19 @@ export default function App() {
                   const completed = dayCards.filter((card) => card.done).length;
                   const tasks = dailyTasks[day.index] || [];
 
+                  const isExpandedDay = selectedExpandedDay === day.index;
+
                   return (
-                    <div key={day.index} className="flex min-w-[132px] flex-1 flex-col rounded-2xl border border-[#ead8c0] bg-[#fff7ea]/95 px-2 py-2 shadow-md">
+                    <div
+                      key={day.index}
+                      onClick={() => setSelectedExpandedDay((currentDay) => (currentDay === day.index ? null : day.index))}
+                      className={
+                        "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
+                        (isExpandedDay
+                          ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl"
+                          : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95")
+                      }
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
@@ -819,7 +831,12 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 text-left">
+                      <div
+                        className={
+                          "mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 text-left " +
+                          (isExpandedDay ? "max-h-[135px]" : "max-h-[88px]")
+                        }
+                      >
                         {tasks.length === 0 ? (
                           <div className="rounded-xl bg-[#efe0cd]/45 px-2 py-1 text-[9px] text-[#9b8c7e]">Sin tareas</div>
                         ) : null}
@@ -840,7 +857,7 @@ export default function App() {
                               <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/70">
                                 {task.done ? <Check className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
                               </span>
-                              <span className={"truncate " + (task.done ? "line-through" : "")}>{task.text}</span>
+                              <span className={(isExpandedDay ? "whitespace-normal break-words " : "truncate ") + (task.done ? "line-through" : "")}>{task.text}</span>
                             </button>
                             <button type="button" onClick={() => removeDailyTask(day.index, task.id)} className="shrink-0 rounded-full bg-white/60 p-1">
                               <Trash2 className="h-3 w-3" />
