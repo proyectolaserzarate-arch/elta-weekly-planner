@@ -31,8 +31,11 @@ function Button({ className = "", children, ...props }) {
   );
 }
 
-const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v6";
-const APP_VERSION = "0.6.0-drag";
+const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
+const APP_VERSION = "0.7.0-zoom";
+const MIN_BOARD_ZOOM = 0.65;
+const MAX_BOARD_ZOOM = 1.45;
+const BOARD_ZOOM_STEP = 0.1;
 const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const fullDayNames = [
   "Lunes",
@@ -218,13 +221,18 @@ function clampFloatingCardOffset(offsetX, offsetY) {
   };
 }
 
-function createLocalSnapshot(floatingCards, dailyTasks, weekStart) {
+function clampBoardZoom(value) {
+  return Math.max(MIN_BOARD_ZOOM, Math.min(MAX_BOARD_ZOOM, Number(value) || 1));
+}
+
+function createLocalSnapshot(floatingCards, dailyTasks, weekStart, boardZoom) {
   return {
-    version: 5,
+    version: 7,
     updatedAt: new Date().toISOString(),
     floatingCards,
     dailyTasks,
     weekStart: weekStart.toISOString(),
+    boardZoom,
   };
 }
 
@@ -252,6 +260,8 @@ function runSelfTests() {
   console.assert(normalizeDailyTasks({ 0: ["Legacy"] })[0][0].text === "Legacy", "legacy string tasks should migrate to objects");
   console.assert(clampFloatingCardOffset(999, -999).x === 120, "drag offset x should be clamped");
   console.assert(clampFloatingCardOffset(999, -999).y === -80, "drag offset y should be clamped");
+  console.assert(clampBoardZoom(99) === MAX_BOARD_ZOOM, "board zoom should be clamped at max");
+  console.assert(clampBoardZoom(-99) === MIN_BOARD_ZOOM, "board zoom should be clamped at min");
 }
 
 runSelfTests();
@@ -268,6 +278,7 @@ export default function App() {
   const [taskInput, setTaskInput] = useState("");
   const [selectedTaskDay, setSelectedTaskDay] = useState(0);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
+  const [boardZoom, setBoardZoom] = useState(clampBoardZoom(localSnapshot?.boardZoom || 1));
   const [form, setForm] = useState({
     title: "",
     detail: "",
@@ -277,6 +288,8 @@ export default function App() {
     priority: "media",
   });
   const boardRef = useRef(null);
+  const pinchStartDistanceRef = useRef(null);
+  const pinchStartZoomRef = useRef(1);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const weekDays = useMemo(
@@ -285,9 +298,9 @@ export default function App() {
   );
 
   useEffect(() => {
-    const snapshot = createLocalSnapshot(floatingCards, dailyTasks, weekStart);
+    const snapshot = createLocalSnapshot(floatingCards, dailyTasks, weekStart, boardZoom);
     window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(snapshot));
-  }, [floatingCards, dailyTasks, weekStart]);
+  }, [floatingCards, dailyTasks, weekStart, boardZoom]);
 
   function addFloatingCard(event) {
     event.preventDefault();
@@ -327,7 +340,10 @@ export default function App() {
         if (card.id !== id) return card;
 
         const currentOffset = getFloatingCardOffset(card);
-        const nextOffset = clampFloatingCardOffset(currentOffset.x + deltaX, currentOffset.y + deltaY);
+        const nextOffset = clampFloatingCardOffset(
+          currentOffset.x + deltaX / boardZoom,
+          currentOffset.y + deltaY / boardZoom
+        );
 
         return {
           ...card,
@@ -336,6 +352,48 @@ export default function App() {
         };
       })
     );
+  }
+
+  function changeBoardZoom(delta) {
+    setBoardZoom((currentZoom) => clampBoardZoom(Number((currentZoom + delta).toFixed(2))));
+  }
+
+  function resetBoardZoom() {
+    setBoardZoom(1);
+  }
+
+  function getTouchDistance(touches) {
+    if (!touches || touches.length < 2) return null;
+    const [firstTouch, secondTouch] = touches;
+    return Math.hypot(
+      secondTouch.clientX - firstTouch.clientX,
+      secondTouch.clientY - firstTouch.clientY
+    );
+  }
+
+  function handleBoardWheel(event) {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    changeBoardZoom(event.deltaY < 0 ? BOARD_ZOOM_STEP : -BOARD_ZOOM_STEP);
+  }
+
+  function handleBoardTouchStart(event) {
+    const distance = getTouchDistance(event.touches);
+    if (!distance) return;
+    pinchStartDistanceRef.current = distance;
+    pinchStartZoomRef.current = boardZoom;
+  }
+
+  function handleBoardTouchMove(event) {
+    const distance = getTouchDistance(event.touches);
+    if (!distance || !pinchStartDistanceRef.current) return;
+    event.preventDefault();
+    const nextZoom = pinchStartZoomRef.current * (distance / pinchStartDistanceRef.current);
+    setBoardZoom(clampBoardZoom(Number(nextZoom.toFixed(2))));
+  }
+
+  function handleBoardTouchEnd() {
+    pinchStartDistanceRef.current = null;
   }
 
   function resetFloatingCardPosition(id) {
@@ -382,6 +440,7 @@ export default function App() {
     setFloatingCards(initialFloatingCards);
     setDailyTasks(normalizeDailyTasks(defaultDailyTasks));
     setWeekStart(startOfWeek(new Date()));
+    setBoardZoom(1);
   }
 
   async function exportCalendarToPdf() {
@@ -630,8 +689,30 @@ export default function App() {
           </Card>
 
           <div className="grid min-h-0 min-w-0 grid-rows-[1fr_190px] gap-2 rounded-[1.5rem]">
-            <div className="min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg">
-              <div className="relative h-full min-h-[360px] min-w-[980px] overflow-visible">
+            <div
+              className="relative min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg"
+              onWheel={handleBoardWheel}
+              onTouchStart={handleBoardTouchStart}
+              onTouchMove={handleBoardTouchMove}
+              onTouchEnd={handleBoardTouchEnd}
+            >
+              <div className="absolute right-3 top-3 z-[450] flex items-center gap-1 rounded-full border border-[#ead8c0] bg-[#fff9f2]/95 px-2 py-1 text-[#5f5145] shadow-sm">
+                <button type="button" onClick={() => changeBoardZoom(-BOARD_ZOOM_STEP)} className="h-7 w-7 rounded-full bg-[#f4e4d2] text-sm font-bold">-</button>
+                <button type="button" onClick={resetBoardZoom} className="min-w-[48px] rounded-full px-2 text-[10px] font-bold">
+                  {Math.round(boardZoom * 100)}%
+                </button>
+                <button type="button" onClick={() => changeBoardZoom(BOARD_ZOOM_STEP)} className="h-7 w-7 rounded-full bg-[#f4e4d2] text-sm font-bold">+</button>
+              </div>
+
+              <div
+                className="relative h-full min-h-[360px] min-w-[980px] overflow-visible transition-transform duration-200"
+                style={{
+                  transform: `scale(${boardZoom})`,
+                  transformOrigin: "top left",
+                  width: `${100 / boardZoom}%`,
+                  height: `${100 / boardZoom}%`,
+                }}
+              >
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
