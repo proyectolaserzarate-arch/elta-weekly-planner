@@ -31,7 +31,8 @@ function Button({ className = "", children, ...props }) {
   );
 }
 
-const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v5";
+const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v6";
+const APP_VERSION = "0.6.0-drag";
 const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const fullDayNames = [
   "Lunes",
@@ -203,6 +204,20 @@ function getDurationDots(card) {
   return Array.from({ length: 7 }, (_, index) => index >= card.startDay && index <= card.endDay);
 }
 
+function getFloatingCardOffset(card) {
+  return {
+    x: Number(card.offsetX || 0),
+    y: Number(card.offsetY || 0),
+  };
+}
+
+function clampFloatingCardOffset(offsetX, offsetY) {
+  return {
+    x: Math.max(-120, Math.min(120, offsetX)),
+    y: Math.max(-80, Math.min(120, offsetY)),
+  };
+}
+
 function createLocalSnapshot(floatingCards, dailyTasks, weekStart) {
   return {
     version: 5,
@@ -235,6 +250,8 @@ function runSelfTests() {
   console.assert(getFloatingCardZIndex({ priority: "baja" }, true) > 250, "hovered cards should jump above the week line");
   console.assert(getDurationDots({ startDay: 1, endDay: 3 }).filter(Boolean).length === 3, "duration dots should match range");
   console.assert(normalizeDailyTasks({ 0: ["Legacy"] })[0][0].text === "Legacy", "legacy string tasks should migrate to objects");
+  console.assert(clampFloatingCardOffset(999, -999).x === 120, "drag offset x should be clamped");
+  console.assert(clampFloatingCardOffset(999, -999).y === -80, "drag offset y should be clamped");
 }
 
 runSelfTests();
@@ -302,6 +319,37 @@ export default function App() {
 
   function deleteFloatingCard(id) {
     setFloatingCards((previous) => previous.filter((card) => card.id !== id));
+  }
+
+  function moveFloatingCard(id, deltaX, deltaY) {
+    setFloatingCards((previous) =>
+      previous.map((card) => {
+        if (card.id !== id) return card;
+
+        const currentOffset = getFloatingCardOffset(card);
+        const nextOffset = clampFloatingCardOffset(currentOffset.x + deltaX, currentOffset.y + deltaY);
+
+        return {
+          ...card,
+          offsetX: nextOffset.x,
+          offsetY: nextOffset.y,
+        };
+      })
+    );
+  }
+
+  function resetFloatingCardPosition(id) {
+    setFloatingCards((previous) =>
+      previous.map((card) =>
+        card.id === id
+          ? {
+              ...card,
+              offsetX: 0,
+              offsetY: 0,
+            }
+          : card
+      )
+    );
   }
 
   function addDailyTask() {
@@ -573,6 +621,9 @@ export default function App() {
   return (
     <div className="h-screen overflow-hidden bg-[#f6ecd9] p-2 text-[#614f3d] md:p-3" style={{ fontFamily: "Comic Sans MS, Nunito, ui-sans-serif, system-ui" }}>
       <div className="mx-auto flex h-full max-w-[1600px] flex-col">
+        <div className="pointer-events-none fixed left-2 top-2 z-[700] rounded-full bg-[#fff9f2]/90 px-2 py-1 text-[10px] font-bold text-[#8b6f54] shadow-sm">
+          ELTA Planner v{APP_VERSION}
+        </div>
         <section className="grid min-h-0 flex-1 gap-2 md:grid-cols-[220px_1fr]">
           <Card className="hidden max-h-full overflow-y-auto rounded-[1.25rem] border border-[#ddc8b3] bg-[#fff9f2]/70 p-2 md:sticky md:top-2 md:block md:self-start">
             {renderPlannerControls()}
@@ -584,7 +635,8 @@ export default function App() {
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
-                    const cardShellClassName = "absolute overflow-visible";
+                    const cardOffset = getFloatingCardOffset(card);
+                    const cardShellClassName = "absolute cursor-grab touch-none overflow-visible active:cursor-grabbing";
                     const paperClassName = [
                       "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
                       getStatusColor(card),
@@ -597,8 +649,13 @@ export default function App() {
                         key={card.id}
                         layout
                         initial={{ opacity: 0, y: 18, rotate: -2 }}
-                        animate={{ opacity: 1, y: 0, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
-                        whileHover={{ y: -10, rotate: 0, scale: 1.05 }}
+                        animate={{ opacity: 1, x: cardOffset.x, y: cardOffset.y, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
+                        whileHover={{ rotate: 0, scale: 1.05 }}
+                        drag
+                        dragMomentum={false}
+                        dragElastic={0.08}
+                        onDragEnd={(_, info) => moveFloatingCard(card.id, info.offset.x, info.offset.y)}
+                        onDoubleClick={() => resetFloatingCardPosition(card.id)}
                         onMouseEnter={() => setHoveredFloatingCardId(card.id)}
                         onMouseLeave={() => setHoveredFloatingCardId(null)}
                         onClick={() => setHoveredFloatingCardId(card.id)}
@@ -608,7 +665,7 @@ export default function App() {
                           width: getFloatingCardWidth(card) + "%",
                           zIndex: getFloatingCardZIndex(card, isHovered),
                           transformOrigin: "center top",
-                          touchAction: "manipulation",
+                          touchAction: "none",
                         }}
                         className={cardShellClassName}
                       >
@@ -619,7 +676,7 @@ export default function App() {
                         </div>
 
                         <div className={paperClassName}>
-                          <div className="flex items-start justify-between text-[#5b4636]">
+                          <div className="flex items-start justify-between text-[#5b4636]" onPointerDown={(event) => event.stopPropagation()}>
                             <button type="button" onClick={() => toggleFloatingCardDone(card.id)} className="rounded-full bg-[#fff8ef]/75 p-1.5">
                               {card.done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
                             </button>
