@@ -152,24 +152,27 @@ function getCurrentWeekDayIndex() {
 }
 
 function getStatusColor(card) {
-  const currentDay = getCurrentWeekDayIndex();
+  if (card.priority === "alta") {
+    return "bg-[#f48b8b] border-[#d94f4f]";
+  }
 
-  if (card.done) return "bg-[#d6edc7] border-[#8fbf75]";
-  if (card.endDay < currentDay) return "bg-[#ffb3cc] border-[#e35c91]";
-  if (card.startDay <= currentDay + 1) return "bg-[#ffe08a] border-[#e5b931]";
-  return "bg-[#d8ef9e] border-[#9cc85d]";
+  if (card.priority === "media") {
+    return "bg-[#ffe08a] border-[#e5b931]";
+  }
+
+  return "bg-[#e9d7bd] border-[#c6a982]";
 }
 
 function getPinColor(priority) {
-  if (priority === "alta") return "bg-[#e4484f] shadow-[0_5px_10px_rgba(180,40,50,0.35)]";
+  if (priority === "alta") return "bg-[#c93333] shadow-[0_5px_10px_rgba(180,40,50,0.35)]";
   if (priority === "media") return "bg-[#f3c02f] shadow-[0_5px_10px_rgba(180,130,20,0.3)]";
-  return "bg-[#65b85b] shadow-[0_5px_10px_rgba(60,130,60,0.28)]";
+  return "bg-[#b18a61] shadow-[0_5px_10px_rgba(120,80,40,0.28)]";
 }
 
 function getPrioritySize(priority) {
-  if (priority === "alta") return "min-h-[128px] max-h-[155px]";
-  if (priority === "media") return "min-h-[104px] max-h-[132px]";
-  return "min-h-[82px] max-h-[108px]";
+  if (priority === "alta") return "min-h-[170px] max-h-[210px]";
+  if (priority === "media") return "min-h-[125px] max-h-[160px]";
+  return "min-h-[88px] max-h-[115px]";
 }
 
 function getTitleSize(priority) {
@@ -192,7 +195,7 @@ function getFloatingCardWidth(card) {
 }
 
 function getFloatingCardLeft(card) {
-  const rawLeft = 4 + card.startDay * 12.5;
+  const rawLeft = 5 + card.startDay * 13;
   const width = getFloatingCardWidth(card);
   return Math.min(rawLeft, 96 - width);
 }
@@ -748,10 +751,11 @@ export default function App() {
                     const cardOffset = getFloatingCardOffset(card);
                     const cardShellClassName = "absolute cursor-grab touch-none overflow-visible active:cursor-grabbing";
                     const paperClassName = [
-                      "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
-                      getStatusColor(card),
-                      getPrioritySize(card.priority),
-                    ].join(" ");
+  "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
+  "mx-1 my-1",
+  getStatusColor(card),
+  getPrioritySize(card.priority),
+].join(" ");
                     const titleClassName = "mt-2 max-w-full overflow-hidden break-words font-semibold leading-[1.05] text-[#31261d] " + getTitleSize(card.priority);
 
                     return (
@@ -771,13 +775,14 @@ export default function App() {
                         onMouseLeave={() => setHoveredFloatingCardId(null)}
                         onClick={() => setHoveredFloatingCardId(card.id)}
                         style={{
-                          left: getFloatingCardLeft(card) + "%",
-                          top: getPriorityLaneTop(card.priority, index) + "px",
-                          width: getFloatingCardWidth(card) + "%",
-                          zIndex: getFloatingCardZIndex(card, isHovered),
-                          transformOrigin: "center top",
-                          touchAction: "none",
-                        }}
+  left: getFloatingCardLeft(card) + "%",
+  top: getPriorityLaneTop(card.priority, index) + "px",
+  width: getFloatingCardWidth(card) + "%",
+  margin: "6px",
+  zIndex: getFloatingCardZIndex(card, isHovered),
+  transformOrigin: "center top",
+  touchAction: "none",
+}}
                         className={cardShellClassName}
                       >
                         <div className="absolute left-1/2 top-[-18px] z-30 -translate-x-1/2">
@@ -786,7 +791,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className={paperClassName}>
+                        <div className={paperClassName + " p-3"}>
                           <div className="flex items-start justify-between text-[#5b4636]" onPointerDown={(event) => event.stopPropagation()}>
                             <button type="button" onClick={() => toggleFloatingCardDone(card.id)} className="rounded-full bg-[#fff8ef]/75 p-1.5">
                               {card.done ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
