@@ -32,7 +32,7 @@ function Button({ className = "", children, ...props }) {
 }
 
 const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
-const APP_VERSION = "0.8.0-snap";
+const APP_VERSION = "0.9.0-conexiones";
 const SNAP_STRENGTH = 0.72;
 const MIN_BOARD_ZOOM = 0.65;
 const MAX_BOARD_ZOOM = 1.45;
@@ -305,6 +305,7 @@ export default function App() {
   const [floatingCards, setFloatingCards] = useState(localSnapshot?.floatingCards || initialFloatingCards);
   const [dailyTasks, setDailyTasks] = useState(normalizeDailyTasks(localSnapshot?.dailyTasks || defaultDailyTasks));
   const [hoveredFloatingCardId, setHoveredFloatingCardId] = useState(null);
+  const [expandedFloatingCardId, setExpandedFloatingCardId] = useState(null);
   const [taskInput, setTaskInput] = useState("");
   const [selectedTaskDay, setSelectedTaskDay] = useState(0);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
@@ -321,6 +322,7 @@ export default function App() {
   const boardRef = useRef(null);
   const pinchStartDistanceRef = useRef(null);
   const pinchStartZoomRef = useRef(1);
+  const lastTapRef = useRef({ id: null, time: 0 });
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const weekDays = useMemo(
@@ -385,6 +387,17 @@ export default function App() {
       })
     );
   }
+
+  function handleFloatingCardTap(cardId) {
+  const now = Date.now();
+  const lastTap = lastTapRef.current;
+
+  if (lastTap.id === cardId && now - lastTap.time < 320) {
+    setExpandedFloatingCardId(cardId);
+  }
+
+  lastTapRef.current = { id: cardId, time: now };
+}
 
   function changeBoardZoom(delta) {
     setBoardZoom((currentZoom) => clampBoardZoom(Number((currentZoom + delta).toFixed(2))));
@@ -734,6 +747,13 @@ export default function App() {
                   {Math.round(boardZoom * 100)}%
                 </button>
                 <button type="button" onClick={() => changeBoardZoom(BOARD_ZOOM_STEP)} className="h-7 w-7 rounded-full bg-[#f4e4d2] text-sm font-bold">+</button>
+                <button
+  type="button"
+  onClick={resetBoardZoom}
+  className="rounded-full bg-[#fff4e2] px-2 py-1 text-[10px] font-bold"
+>
+  Reset
+</button>
               </div>
 
               <div
@@ -770,10 +790,13 @@ export default function App() {
                         dragMomentum={false}
                         dragElastic={0.16}
                         onDragEnd={(_, info) => moveFloatingCard(card.id, info.offset.x, info.offset.y)}
-                        onDoubleClick={() => resetFloatingCardPosition(card.id)}
+                        onDoubleClick={() => setExpandedFloatingCardId(card.id)}
                         onMouseEnter={() => setHoveredFloatingCardId(card.id)}
                         onMouseLeave={() => setHoveredFloatingCardId(null)}
-                        onClick={() => setHoveredFloatingCardId(card.id)}
+                        onClick={() => {
+  setHoveredFloatingCardId(card.id);
+  handleFloatingCardTap(card.id);
+}}
                         style={{
   left: getFloatingCardLeft(card) + "%",
   top: getPriorityLaneTop(card.priority, index) + "px",
@@ -843,21 +866,26 @@ export default function App() {
                   const tasks = dailyTasks[day.index] || [];
 
                   const isExpandedDay = selectedExpandedDay === day.index;
+                  const isToday = getCurrentWeekDayIndex() === day.index;
 
                   return (
                     <div
                       key={day.index}
                       onClick={() => setSelectedExpandedDay((currentDay) => (currentDay === day.index ? null : day.index))}
                       className={
-                        "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
-                        (isExpandedDay
-                          ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl"
-                          : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95")
-                      }
+  "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
+  (isExpandedDay
+    ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
+    : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
+  (isToday
+    ? "ring-4 ring-[#d18b46] ring-offset-2 ring-offset-[#fff4e2]"
+    : "")
+}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="text-base font-semibold text-[#5f5145]">{day.name}</div>
+                          <div className="text-base font-semibold text-[#5f5145]">{isToday ? "HOY · " : ""}
+{day.name}</div>
                           <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
                         </div>
                         <div className="rounded-full bg-[#fff9f2]/80 px-2 py-1 text-[10px] font-bold text-[#8b6f54]">
@@ -906,7 +934,73 @@ export default function App() {
             </div>
           </div>
         </section>
+<AnimatePresence>
+  {expandedFloatingCardId ? (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[800] bg-[#3d2b1f]/35 p-4"
+      onClick={() => setExpandedFloatingCardId(null)}
+    >
+      {floatingCards
+        .filter((card) => card.id === expandedFloatingCardId)
+        .map((card) => (
+          <motion.div
+            key={card.id}
+            initial={{ scale: 0.9, y: 30 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 30 }}
+            className={"mx-auto flex h-full max-w-xl flex-col rounded-[2rem] border p-6 shadow-2xl " + getStatusColor(card)}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#6b513e]">
+                  {card.priority === "baja" ? "normal" : card.priority}
+                </div>
+                <h2 className="mt-2 text-3xl font-bold text-[#31261d]">{card.title}</h2>
+              </div>
 
+              <button
+                type="button"
+                onClick={() => setExpandedFloatingCardId(null)}
+                className="rounded-full bg-white/70 p-3"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="flex-1 overflow-y-auto text-base leading-relaxed text-[#5e4939]">
+              {card.detail || "Sin detalle cargado."}
+            </p>
+
+            <div className="mt-4 rounded-2xl bg-white/45 p-4 text-sm font-semibold text-[#6b513e]">
+              Duración: {dayNames[card.startDay]} → {dayNames[card.endDay]}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                onClick={() => toggleFloatingCardDone(card.id)}
+                className="rounded-xl bg-white/70 px-4 py-3 font-bold"
+              >
+                {card.done ? "Desmarcar" : "Completar"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => resetFloatingCardPosition(card.id)}
+                className="rounded-xl bg-white/70 px-4 py-3 font-bold"
+              >
+                Reset posición
+              </Button>
+            </div>
+          </motion.div>
+        ))}
+    </motion.div>
+  ) : null}
+</AnimatePresence>
         <button
           type="button"
           onClick={() => setIsMobilePanelOpen(true)}
