@@ -989,12 +989,18 @@ export default function App() {
               </Button>
 
               <Button
-                type="button"
-                onClick={() => resetFloatingCardPosition(card.id)}
-                className="rounded-xl bg-white/70 px-4 py-3 font-bold"
-              >
-                Reset posición
-              </Button>
+  type="button"
+  onClick={() => {
+    resetFloatingCardPosition(card.id);
+
+    setTimeout(() => {
+      setExpandedFloatingCardId(null);
+    }, 150);
+  }}
+  className="rounded-xl bg-white/70 px-4 py-3 font-bold"
+>
+  Reset posición
+</Button>
             </div>
           </motion.div>
         ))}
