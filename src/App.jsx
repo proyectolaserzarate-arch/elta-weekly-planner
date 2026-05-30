@@ -733,7 +733,7 @@ export default function App() {
             {renderPlannerControls()}
           </Card>
 
-          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_210px] gap-2 rounded-[1.5rem]">
+          <div className="grid min-h-0 min-w-0 grid-rows-[minmax(430px,1fr)_230px] gap-2 rounded-[1.5rem]">
             <div
               className="relative min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg"
               onWheel={handleBoardWheel}
@@ -757,7 +757,7 @@ export default function App() {
               </div>
 
               <div
-                className="relative h-full min-h-[360px] min-w-[980px] overflow-visible transition-transform duration-200"
+  className="relative h-full min-h-[430px] min-w-[980px] overflow-visible transition-transform duration-200"
                 style={{
                   transform: `scale(${boardZoom})`,
                   transformOrigin: "top left",
@@ -781,10 +781,14 @@ export default function App() {
                     return (
                       <motion.div
                         key={card.id}
-                        layout
                         initial={{ opacity: 0, y: 18, rotate: -2 }}
                         animate={{ opacity: 1, x: cardOffset.x, y: cardOffset.y, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
-                        transition={{ type: "spring", stiffness: 260, damping: 22, mass: card.priority === "alta" ? 1.05 : 0.85 }}
+                        transition={{
+  type: "spring",
+  stiffness: 180,
+  damping: 34,
+  mass: 0.9,
+}}
                         whileHover={{ rotate: 0, scale: 1.055 }}
                         drag
                         dragMomentum={false}
@@ -859,7 +863,7 @@ export default function App() {
             </div>
 
             <div data-export-board="true" ref={boardRef} className="overflow-x-auto rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-2 shadow-lg">
-              <div className="flex h-full min-w-[980px] items-stretch gap-2">
+              <div className="flex h-full min-w-[760px] items-stretch gap-2">
                 {weekDays.map((day) => {
                   const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
                   const completed = dayCards.filter((card) => card.done).length;
@@ -875,8 +879,8 @@ export default function App() {
                       className={
   "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
   (isExpandedDay
-    ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
-    : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
+    ? "min-w-[200px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
+    : "min-w-[105px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
   (isToday
     ? "ring-4 ring-[#d18b46] ring-offset-2 ring-offset-[#fff4e2]"
     : "")
