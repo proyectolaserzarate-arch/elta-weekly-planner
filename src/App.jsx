@@ -31,7 +31,7 @@ function Button({ className = "", children, ...props }) {
   );
 }
 
-const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
+const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v8";
 const APP_VERSION = "1.0.0-conexiones";
 const SNAP_STRENGTH = 0.72;
 const MIN_BOARD_ZOOM = 0.65;
@@ -152,14 +152,8 @@ function getCurrentWeekDayIndex() {
 }
 
 function getStatusColor(card) {
-  if (card.priority === "alta") {
-    return "bg-[#f48b8b] border-[#d94f4f]";
-  }
-
-  if (card.priority === "media") {
-    return "bg-[#ffe08a] border-[#e5b931]";
-  }
-
+  if (card.priority === "alta") return "bg-[#f48b8b] border-[#d94f4f]";
+  if (card.priority === "media") return "bg-[#ffe08a] border-[#e5b931]";
   return "bg-[#e9d7bd] border-[#c6a982]";
 }
 
@@ -296,7 +290,7 @@ function clampBoardZoom(value) {
 
 function createLocalSnapshot(floatingCards, dailyTasks, weekStart, boardZoom) {
   return {
-    version: 7,
+    version: 8,
     updatedAt: new Date().toISOString(),
     floatingCards,
     dailyTasks,
@@ -406,6 +400,7 @@ export default function App() {
 
   function deleteFloatingCard(id) {
     setFloatingCards((previous) => previous.filter((card) => card.id !== id));
+    if (expandedFloatingCardId === id) setExpandedFloatingCardId(null);
   }
 
   function moveFloatingCard(id, deltaX, deltaY) {
@@ -430,15 +425,15 @@ export default function App() {
   }
 
   function handleFloatingCardTap(cardId) {
-  const now = Date.now();
-  const lastTap = lastTapRef.current;
+    const now = Date.now();
+    const lastTap = lastTapRef.current;
 
-  if (lastTap.id === cardId && now - lastTap.time < 320) {
-    setExpandedFloatingCardId(cardId);
+    if (lastTap.id === cardId && now - lastTap.time < 320) {
+      setExpandedFloatingCardId(cardId);
+    }
+
+    lastTapRef.current = { id: cardId, time: now };
   }
-
-  lastTapRef.current = { id: cardId, time: now };
-}
 
   function changeBoardZoom(delta) {
     setBoardZoom((currentZoom) => clampBoardZoom(Number((currentZoom + delta).toFixed(2))));
@@ -446,6 +441,7 @@ export default function App() {
 
   function resetBoardZoom() {
     setBoardZoom(1);
+    setExpandedFloatingCardId(null);
   }
 
   function getTouchDistance(touches) {
@@ -568,9 +564,9 @@ export default function App() {
               ? "Proximo"
               : "En tiempo";
 
-        if (card.priority === "alta") pdf.setFillColor(255, 224, 138);
-        else if (card.priority === "media") pdf.setFillColor(255, 238, 158);
-        else pdf.setFillColor(216, 239, 158);
+        if (card.priority === "alta") pdf.setFillColor(244, 139, 139);
+        else if (card.priority === "media") pdf.setFillColor(255, 224, 138);
+        else pdf.setFillColor(233, 215, 189);
 
         pdf.roundedRect(margin, y, 82, 28, 3, 3, "F");
         pdf.setTextColor(49, 38, 29);
@@ -774,7 +770,7 @@ export default function App() {
             {renderPlannerControls()}
           </Card>
 
-          <div className="grid min-h-0 min-w-0 grid-rows-[190px_170px] gap-2 rounded-[1.5rem]">
+          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_210px] gap-2 rounded-[1.5rem]">
             <div
               className="relative min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg"
               onWheel={handleBoardWheel}
@@ -788,58 +784,56 @@ export default function App() {
                   {Math.round(boardZoom * 100)}%
                 </button>
                 <button type="button" onClick={() => changeBoardZoom(BOARD_ZOOM_STEP)} className="h-7 w-7 rounded-full bg-[#f4e4d2] text-sm font-bold">+</button>
-                <button
-  type="button"
-  onClick={resetBoardZoom}
-  className="rounded-full bg-[#fff4e2] px-2 py-1 text-[10px] font-bold"
->
-  Reset
-</button>
+                <button type="button" onClick={resetBoardZoom} className="rounded-full bg-[#fff4e2] px-2 py-1 text-[10px] font-bold">
+                  Reset
+                </button>
               </div>
 
               <div
-                className="relative h-full min-h-[190px] min-w-[720px] overflow-visible transition-transform duration-200"
+                className="relative h-full min-h-[360px] min-w-[980px] overflow-visible transition-transform duration-200"
                 style={{
                   transform: `scale(${boardZoom})`,
                   transformOrigin: "top left",
                   width: `${100 / boardZoom}%`,
                   height: `${100 / boardZoom}%`,
-                }}            
-              ><svg
-  className="pointer-events-none absolute inset-0 z-[1] h-full w-full overflow-visible"
-  viewBox="0 0 980 360"
-  preserveAspectRatio="none"
->
-  {getCardConnections(floatingCards).map((connection) => {
-    const source = getFloatingCardCenter(connection.sourceCard, connection.sourceIndex);
-    const target = getFloatingCardCenter(connection.targetCard, connection.targetIndex);
-    const middleX = (source.x + target.x) / 2;
+                }}
+              >
+                <svg
+                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full overflow-visible"
+                  viewBox="0 0 980 360"
+                  preserveAspectRatio="none"
+                >
+                  {getCardConnections(floatingCards).map((connection) => {
+                    const source = getFloatingCardCenter(connection.sourceCard, connection.sourceIndex);
+                    const target = getFloatingCardCenter(connection.targetCard, connection.targetIndex);
+                    const middleX = (source.x + target.x) / 2;
 
-    return (
-      <path
-        key={connection.id}
-        d={`M ${source.x} ${source.y} C ${middleX} ${source.y}, ${middleX} ${target.y}, ${target.x} ${target.y}`}
-        fill="none"
-        stroke="#9b7a55"
-        strokeWidth="2"
-        strokeDasharray="6 7"
-        strokeLinecap="round"
-        opacity="0.38"
-      />
-    );
-  })}
-</svg>
+                    return (
+                      <path
+                        key={connection.id}
+                        d={`M ${source.x} ${source.y} C ${middleX} ${source.y}, ${middleX} ${target.y}, ${target.x} ${target.y}`}
+                        fill="none"
+                        stroke="#9b7a55"
+                        strokeWidth="2"
+                        strokeDasharray="6 7"
+                        strokeLinecap="round"
+                        opacity="0.38"
+                      />
+                    );
+                  })}
+                </svg>
+
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
                     const cardOffset = getFloatingCardOffset(card);
                     const cardShellClassName = "absolute cursor-grab touch-none overflow-visible active:cursor-grabbing";
                     const paperClassName = [
-  "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
-  "mx-1 my-1",
-  getStatusColor(card),
-  getPrioritySize(card.priority),
-].join(" ");
+                      "relative h-full overflow-hidden rounded-md border shadow-xl transition-all duration-300 hover:shadow-2xl",
+                      "mx-1 my-1",
+                      getStatusColor(card),
+                      getPrioritySize(card.priority),
+                    ].join(" ");
                     const titleClassName = "mt-2 max-w-full overflow-hidden break-words font-semibold leading-[1.05] text-[#31261d] " + getTitleSize(card.priority);
 
                     return (
@@ -847,12 +841,7 @@ export default function App() {
                         key={card.id}
                         initial={{ opacity: 0, y: 18, rotate: -2 }}
                         animate={{ opacity: 1, x: cardOffset.x, y: cardOffset.y, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
-                        transition={{
-  type: "spring",
-  stiffness: 180,
-  damping: 34,
-  mass: 0.9,
-}}
+                        transition={{ type: "spring", stiffness: 180, damping: 34, mass: 0.9 }}
                         whileHover={{ rotate: 0, scale: 1.055 }}
                         drag
                         dragMomentum={false}
@@ -862,18 +851,18 @@ export default function App() {
                         onMouseEnter={() => setHoveredFloatingCardId(card.id)}
                         onMouseLeave={() => setHoveredFloatingCardId(null)}
                         onClick={() => {
-  setHoveredFloatingCardId(card.id);
-  handleFloatingCardTap(card.id);
-}}
+                          setHoveredFloatingCardId(card.id);
+                          handleFloatingCardTap(card.id);
+                        }}
                         style={{
-  left: getFloatingCardLeft(card) + "%",
-  top: getPriorityLaneTop(card.priority, index) + "px",
-  width: getFloatingCardWidth(card) + "%",
-  margin: "6px",
-  zIndex: getFloatingCardZIndex(card, isHovered),
-  transformOrigin: "center top",
-  touchAction: "none",
-}}
+                          left: getFloatingCardLeft(card) + "%",
+                          top: getPriorityLaneTop(card.priority, index) + "px",
+                          width: getFloatingCardWidth(card) + "%",
+                          margin: "6px",
+                          zIndex: getFloatingCardZIndex(card, isHovered),
+                          transformOrigin: "center top",
+                          touchAction: "none",
+                        }}
                         className={cardShellClassName}
                       >
                         <div className="absolute left-1/2 top-[-18px] z-30 -translate-x-1/2">
@@ -927,12 +916,11 @@ export default function App() {
             </div>
 
             <div data-export-board="true" ref={boardRef} className="overflow-x-auto rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-2 shadow-lg">
-              <div className="flex h-full min-w-[720px] items-stretch gap-2">
+              <div className="flex h-full min-w-[980px] items-stretch gap-2">
                 {weekDays.map((day) => {
                   const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
                   const completed = dayCards.filter((card) => card.done).length;
                   const tasks = dailyTasks[day.index] || [];
-
                   const isExpandedDay = selectedExpandedDay === day.index;
                   const isToday = getCurrentWeekDayIndex() === day.index;
 
@@ -941,19 +929,19 @@ export default function App() {
                       key={day.index}
                       onClick={() => setSelectedExpandedDay((currentDay) => (currentDay === day.index ? null : day.index))}
                       className={
-  "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
-  (isExpandedDay
-    ? "min-w-[180px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
-    : "min-w-[95px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
-  (isToday
-    ? "ring-4 ring-[#d18b46] ring-offset-2 ring-offset-[#fff4e2]"
-    : "")
-}
+                        "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
+                        (isExpandedDay
+                          ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
+                          : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
+                        (isToday ? "ring-4 ring-[#d18b46] ring-offset-2 ring-offset-[#fff4e2]" : "")
+                      }
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="text-base font-semibold text-[#5f5145]">{isToday ? "HOY · " : ""}
-{day.name}</div>
+                          <div className="text-base font-semibold text-[#5f5145]">
+                            {isToday ? "HOY · " : ""}
+                            {day.name}
+                          </div>
                           <div className="text-xs text-[#9b8c7e]">{formatDate(day.date)}</div>
                         </div>
                         <div className="rounded-full bg-[#fff9f2]/80 px-2 py-1 text-[10px] font-bold text-[#8b6f54]">
@@ -1002,79 +990,78 @@ export default function App() {
             </div>
           </div>
         </section>
-<AnimatePresence>
-  {expandedFloatingCardId ? (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[800] bg-[#3d2b1f]/35 p-4"
-      onClick={() => setExpandedFloatingCardId(null)}
-    >
-      {floatingCards
-        .filter((card) => card.id === expandedFloatingCardId)
-        .map((card) => (
-          <motion.div
-            key={card.id}
-            initial={{ scale: 0.9, y: 30 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 30 }}
-            className={"mx-auto flex h-full max-w-xl flex-col rounded-[2rem] border p-6 shadow-2xl " + getStatusColor(card)}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-[#6b513e]">
-                  {card.priority === "baja" ? "normal" : card.priority}
-                </div>
-                <h2 className="mt-2 text-3xl font-bold text-[#31261d]">{card.title}</h2>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => setExpandedFloatingCardId(null)}
-                className="rounded-full bg-white/70 p-3"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <AnimatePresence>
+          {expandedFloatingCardId ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[800] bg-[#3d2b1f]/35 p-4"
+              onClick={() => setExpandedFloatingCardId(null)}
+            >
+              {floatingCards
+                .filter((card) => card.id === expandedFloatingCardId)
+                .map((card) => (
+                  <motion.div
+                    key={card.id}
+                    initial={{ scale: 0.9, y: 30 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 30 }}
+                    className={"mx-auto flex h-full max-w-xl flex-col rounded-[2rem] border p-6 shadow-2xl " + getStatusColor(card)}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="mb-4 flex items-start justify-between">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-wider text-[#6b513e]">
+                          {card.priority === "baja" ? "normal" : card.priority}
+                        </div>
+                        <h2 className="mt-2 text-3xl font-bold text-[#31261d]">{card.title}</h2>
+                      </div>
 
-            <p className="flex-1 overflow-y-auto text-base leading-relaxed text-[#5e4939]">
-              {card.detail || "Sin detalle cargado."}
-            </p>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedFloatingCardId(null)}
+                        className="rounded-full bg-white/70 p-3"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
 
-            <div className="mt-4 rounded-2xl bg-white/45 p-4 text-sm font-semibold text-[#6b513e]">
-              Duración: {dayNames[card.startDay]} → {dayNames[card.endDay]}
-            </div>
+                    <p className="flex-1 overflow-y-auto text-base leading-relaxed text-[#5e4939]">
+                      {card.detail || "Sin detalle cargado."}
+                    </p>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                onClick={() => toggleFloatingCardDone(card.id)}
-                className="rounded-xl bg-white/70 px-4 py-3 font-bold"
-              >
-                {card.done ? "Desmarcar" : "Completar"}
-              </Button>
+                    <div className="mt-4 rounded-2xl bg-white/45 p-4 text-sm font-semibold text-[#6b513e]">
+                      Duración: {dayNames[card.startDay]} → {dayNames[card.endDay]}
+                    </div>
 
-              <Button
-  type="button"
-  onClick={() => {
-    resetFloatingCardPosition(card.id);
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <Button
+                        type="button"
+                        onClick={() => toggleFloatingCardDone(card.id)}
+                        className="rounded-xl bg-white/70 px-4 py-3 font-bold"
+                      >
+                        {card.done ? "Desmarcar" : "Completar"}
+                      </Button>
 
-    setTimeout(() => {
-      setExpandedFloatingCardId(null);
-    }, 150);
-  }}
-  className="rounded-xl bg-white/70 px-4 py-3 font-bold"
->
-  Reset posición
-</Button>
-            </div>
-          </motion.div>
-        ))}
-    </motion.div>
-  ) : null}
-</AnimatePresence>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          resetFloatingCardPosition(card.id);
+                          setTimeout(() => setExpandedFloatingCardId(null), 150);
+                        }}
+                        className="rounded-xl bg-white/70 px-4 py-3 font-bold"
+                      >
+                        Reset posición
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
         <button
           type="button"
           onClick={() => setIsMobilePanelOpen(true)}
