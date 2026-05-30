@@ -32,7 +32,7 @@ function Button({ className = "", children, ...props }) {
 }
 
 const LOCAL_STORAGE_KEY = "elta-weekly-floating-planner-v7";
-const APP_VERSION = "0.9.0-conexiones";
+const APP_VERSION = "1.0.0-conexiones";
 const SNAP_STRENGTH = 0.72;
 const MIN_BOARD_ZOOM = 0.65;
 const MAX_BOARD_ZOOM = 1.45;
@@ -198,6 +198,47 @@ function getFloatingCardLeft(card) {
   const rawLeft = 5 + card.startDay * 13;
   const width = getFloatingCardWidth(card);
   return Math.min(rawLeft, 96 - width);
+}
+
+function getFloatingCardCenter(card, index) {
+  const left = getFloatingCardLeft(card);
+  const width = getFloatingCardWidth(card);
+  const top = getPriorityLaneTop(card.priority, index);
+  const offset = getFloatingCardOffset(card);
+
+  return {
+    x: ((left + width / 2) / 100) * 980 + offset.x,
+    y: top + offset.y + 70,
+  };
+}
+
+function shouldConnectCards(sourceCard, targetCard) {
+  if (sourceCard.id === targetCard.id) return false;
+
+  const sourceEndsBeforeTarget = sourceCard.endDay <= targetCard.startDay;
+  const closeInTime = targetCard.startDay - sourceCard.endDay <= 1;
+
+  return sourceEndsBeforeTarget && closeInTime;
+}
+
+function getCardConnections(cards) {
+  const connections = [];
+
+  cards.forEach((sourceCard, sourceIndex) => {
+    cards.forEach((targetCard, targetIndex) => {
+      if (!shouldConnectCards(sourceCard, targetCard)) return;
+
+      connections.push({
+        id: `${sourceCard.id}-${targetCard.id}`,
+        sourceCard,
+        targetCard,
+        sourceIndex,
+        targetIndex,
+      });
+    });
+  });
+
+  return connections.slice(0, 8);
 }
 
 function getFloatingCardZIndex(card, isHovered) {
@@ -733,7 +774,7 @@ export default function App() {
             {renderPlannerControls()}
           </Card>
 
-          <div className="grid min-h-0 min-w-0 grid-rows-[1fr_210px] gap-2 rounded-[1.5rem]">
+          <div className="grid min-h-0 min-w-0 grid-rows-[190px_170px] gap-2 rounded-[1.5rem]">
             <div
               className="relative min-h-0 overflow-x-auto overflow-y-hidden rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-3 shadow-lg"
               onWheel={handleBoardWheel}
@@ -757,14 +798,37 @@ export default function App() {
               </div>
 
               <div
-                className="relative h-full min-h-[360px] min-w-[980px] overflow-visible transition-transform duration-200"
+                className="relative h-full min-h-[190px] min-w-[720px] overflow-visible transition-transform duration-200"
                 style={{
                   transform: `scale(${boardZoom})`,
                   transformOrigin: "top left",
                   width: `${100 / boardZoom}%`,
                   height: `${100 / boardZoom}%`,
-                }}
-              >
+                }}            
+              ><svg
+  className="pointer-events-none absolute inset-0 z-[1] h-full w-full overflow-visible"
+  viewBox="0 0 980 360"
+  preserveAspectRatio="none"
+>
+  {getCardConnections(floatingCards).map((connection) => {
+    const source = getFloatingCardCenter(connection.sourceCard, connection.sourceIndex);
+    const target = getFloatingCardCenter(connection.targetCard, connection.targetIndex);
+    const middleX = (source.x + target.x) / 2;
+
+    return (
+      <path
+        key={connection.id}
+        d={`M ${source.x} ${source.y} C ${middleX} ${source.y}, ${middleX} ${target.y}, ${target.x} ${target.y}`}
+        fill="none"
+        stroke="#9b7a55"
+        strokeWidth="2"
+        strokeDasharray="6 7"
+        strokeLinecap="round"
+        opacity="0.38"
+      />
+    );
+  })}
+</svg>
                 <AnimatePresence>
                   {floatingCards.map((card, index) => {
                     const isHovered = hoveredFloatingCardId === card.id;
@@ -781,10 +845,14 @@ export default function App() {
                     return (
                       <motion.div
                         key={card.id}
-                        layout
                         initial={{ opacity: 0, y: 18, rotate: -2 }}
                         animate={{ opacity: 1, x: cardOffset.x, y: cardOffset.y, rotate: index % 2 === 0 ? -1.4 : 1.4 }}
-                        transition={{ type: "spring", stiffness: 260, damping: 22, mass: card.priority === "alta" ? 1.05 : 0.85 }}
+                        transition={{
+  type: "spring",
+  stiffness: 180,
+  damping: 34,
+  mass: 0.9,
+}}
                         whileHover={{ rotate: 0, scale: 1.055 }}
                         drag
                         dragMomentum={false}
@@ -859,7 +927,7 @@ export default function App() {
             </div>
 
             <div data-export-board="true" ref={boardRef} className="overflow-x-auto rounded-[1.5rem] border border-[#ead8c0] bg-[#fff4e2] p-2 shadow-lg">
-              <div className="flex h-full min-w-[980px] items-stretch gap-2">
+              <div className="flex h-full min-w-[720px] items-stretch gap-2">
                 {weekDays.map((day) => {
                   const dayCards = floatingCards.filter((card) => card.startDay <= day.index && card.endDay >= day.index);
                   const completed = dayCards.filter((card) => card.done).length;
@@ -875,8 +943,8 @@ export default function App() {
                       className={
   "flex flex-col rounded-2xl border px-2 py-2 shadow-md transition-all duration-300 " +
   (isExpandedDay
-    ? "min-w-[260px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
-    : "min-w-[132px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
+    ? "min-w-[180px] flex-[2] border-[#cfa983] bg-[#ffe8b8] shadow-xl "
+    : "min-w-[95px] flex-1 border-[#ead8c0] bg-[#fff7ea]/95 ") +
   (isToday
     ? "ring-4 ring-[#d18b46] ring-offset-2 ring-offset-[#fff4e2]"
     : "")
